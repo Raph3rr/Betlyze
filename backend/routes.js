@@ -6,7 +6,8 @@ import User from './User.js'
 const router = Router()
 const FREE_LIMIT = 3
 const WINDOW_MS = 24 * 60 * 60 * 1000 // 24 hours after the first conversion
-const cookieOpts = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 }
+const isProduction = process.env.NODE_ENV === 'production'
+const cookieOpts = { httpOnly: true, sameSite: isProduction ? 'none' : 'lax', secure: isProduction, maxAge: 7 * 24 * 60 * 60 * 1000 }
 
 const handle = (fn) => (req, res) =>
   fn(req, res).catch((e) => {
