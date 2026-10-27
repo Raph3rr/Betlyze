@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #020713;
+  --color-panel: #08111f;
+  --color-line: #16233d;
+  --color-brand: #0183fd;
+  --color-brand-soft: #25b1fe;
+  --color-brand-deep: #0060fd;
+  --color-paper: #ffffff;
+  --font-display: "Bricolage Grotesque", sans-serif;
+  --font-body: "Manrope", sans-serif;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-body);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}

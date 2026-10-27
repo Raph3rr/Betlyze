@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /settings
+Disallow: /login
+Disallow: /signup
+
+Sitemap: https://betlyze.com/sitemap.xml
