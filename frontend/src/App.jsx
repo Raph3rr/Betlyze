@@ -5,7 +5,7 @@ import Home from './pages/Home'
 import Converter from './pages/Converter'
 import Predictions from './pages/Predictions'
 import Auth from './pages/Auth'
-import ComingSoon from './pages/ComingSoon'
+import Settings from './pages/Settings'
 
 export default function App() {
   return (
@@ -19,7 +19,7 @@ export default function App() {
             <Route path="/predictions" element={<Predictions />} />
             <Route path="/login" element={<Auth mode="login" />} />
             <Route path="/signup" element={<Auth mode="signup" />} />
-            <Route path="/settings" element={<ComingSoon title="Settings" />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
       </AuthProvider>

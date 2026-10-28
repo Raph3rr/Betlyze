@@ -30,7 +30,7 @@ const accas = [
 
 const totalOdds = (games) => games.reduce((t, g) => t * g.odds, 1).toFixed(2)
 
-function dayTabs() {
+export function dayTabs() {
   return [-1, 0, 1, 2, 3].map((offset) => {
     const d = new Date()
     d.setDate(d.getDate() + offset)

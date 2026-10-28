@@ -14,7 +14,7 @@ for (const key of ['MONGODB_URI', 'JWT_SECRET']) {
 
 const app = express()
 app.set('trust proxy', 1) // hosts like Render and Railway sit behind a proxy
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }))
+app.use(cors({ origin: (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, ''), credentials: true }))
 app.use(express.json())
 app.use(cookieParser())
 

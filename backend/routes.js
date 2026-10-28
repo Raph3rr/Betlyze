@@ -2,12 +2,18 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import User from './User.js'
+import { CATEGORIES, FREE, samplePicks } from './predictions.js'
 
 const router = Router()
 const FREE_LIMIT = 3
 const WINDOW_MS = 24 * 60 * 60 * 1000 // 24 hours after the first conversion
 const isProduction = process.env.NODE_ENV === 'production'
-const cookieOpts = { httpOnly: true, sameSite: isProduction ? 'none' : 'lax', secure: isProduction, maxAge: 7 * 24 * 60 * 60 * 1000 }
+const cookieOpts = {
+  httpOnly: true,
+  sameSite: isProduction ? 'none' : 'lax',
+  secure: isProduction,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+}
 
 const handle = (fn) => (req, res) =>
   fn(req, res).catch((e) => {
@@ -38,6 +44,15 @@ async function auth(req, res, next) {
   }
 }
 
+// Like auth, but never blocks: used where logged-out visitors may still see free content.
+async function optionalAuth(req, res, next) {
+  try {
+    const { id } = jwt.verify(req.cookies.token, process.env.JWT_SECRET)
+    req.user = await User.findById(id)
+  } catch {}
+  next()
+}
+
 router.post('/signup', handle(async (req, res) => {
   const { username = '', email = '', password = '' } = req.body
   if (username.trim().length < 3) return res.status(400).json({ error: 'Username must be at least 3 characters.' })
@@ -57,11 +72,34 @@ router.post('/login', handle(async (req, res) => {
 }))
 
 router.post('/logout', (req, res) => {
-  res.clearCookie('token')
+  res.clearCookie('token', { httpOnly: true, sameSite: cookieOpts.sameSite, secure: cookieOpts.secure })
   res.json({ ok: true })
 })
 
 router.get('/me', auth, (req, res) => res.json({ user: view(req.user) }))
+
+router.post('/password', auth, handle(async (req, res) => {
+  const { currentPassword = '', newPassword = '' } = req.body
+  if (newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' })
+  if (!(await bcrypt.compare(currentPassword, req.user.passwordHash))) return res.status(400).json({ error: 'Your current password is wrong.' })
+  req.user.passwordHash = await bcrypt.hash(newPassword, 12)
+  await req.user.save()
+  res.json({ ok: true })
+}))
+
+// SAMPLE predictions. Locked categories are decided HERE: free users never receive the games of a locked category.
+router.get('/predictions', optionalAuth, (req, res) => {
+  const day = Math.max(0, Math.min(3, Number(req.query.day) || 0))
+  const d = new Date()
+  d.setDate(d.getDate() + day)
+  const seed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()
+  const pro = req.user?.plan === 'pro'
+  const categories = CATEGORIES.map((odds) => {
+    const picks = samplePicks(odds, seed + odds)
+    return !FREE.includes(odds) && !pro ? { odds, locked: true, count: picks.length, picks: [] } : { odds, locked: false, picks }
+  })
+  res.json({ sample: true, day, categories })
+})
 
 // MOCK conversion: enforces the daily limit for real, but the result is fake until we connect the converter API.
 router.post('/convert', auth, handle(async (req, res) => {
