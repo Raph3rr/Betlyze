@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import PicksByDay from '../components/PicksByDay'
+import PredictionsView from '../components/PredictionsView'
 
 const steps = [
   ['Paste a booking code', 'Enter the code from the bookie your friend used.'],
@@ -53,8 +53,8 @@ export default function Home() {
 
       {/* Picks by day */}
       <section className="mt-20">
-        <h2 className="font-display text-2xl font-bold sm:text-3xl">Picks by day</h2>
-        <PicksByDay />
+        <h2 className="font-display text-2xl font-bold sm:text-3xl">AI predictions</h2>
+        <PredictionsView preview />
       </section>
 
       {/* How it works */}

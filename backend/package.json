@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "check-keys": "node scripts/checkKeys.js",
+    "sample": "node scripts/sample.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

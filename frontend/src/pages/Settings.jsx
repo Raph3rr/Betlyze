@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../AuthContext'
+import PasswordInput from '../components/PasswordInput'
 
 const field = 'w-full rounded-lg border border-line bg-panel px-4 py-3 outline-none focus:border-brand'
 
@@ -83,10 +84,10 @@ export default function Settings() {
       <Section title="Change password">
         <form onSubmit={change} className="space-y-4">
           <label className="block text-sm font-semibold">Current password
-            <input type="password" className={`${field} mt-1 font-normal`} value={form.currentPassword} onChange={(e) => setForm({ ...form, currentPassword: e.target.value })} autoComplete="current-password" required />
+            <PasswordInput className={`${field} font-normal`} value={form.currentPassword} onChange={(e) => setForm({ ...form, currentPassword: e.target.value })} autoComplete="current-password" required />
           </label>
           <label className="block text-sm font-semibold">New password
-            <input type="password" className={`${field} mt-1 font-normal`} value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} autoComplete="new-password" minLength={8} required />
+            <PasswordInput className={`${field} font-normal`} value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} autoComplete="new-password" minLength={8} required />
           </label>
           {error && <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>}
           {msg && <p role="status" className="rounded-lg border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-brand">{msg}</p>}

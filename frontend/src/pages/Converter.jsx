@@ -88,7 +88,8 @@ export default function Converter() {
 
       {result && (
         <div className="mt-6 rounded-2xl border border-brand p-5 sm:p-6" aria-live="polite">
-          <p className="text-sm text-paper/60">Your {result.to} code</p>
+          <p className="mb-2 inline-block rounded-full border border-red-500/50 bg-red-500/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-red-300">Demo result, not a real code</p>
+          <p className="text-sm text-paper/60">Example {result.to} code</p>
           <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
             <p className="font-display text-3xl font-bold tracking-wider text-brand">{result.newCode}</p>
             <button onClick={copy} className="rounded-lg border border-line px-4 py-2 text-sm font-semibold hover:border-brand">{copied ? 'Copied' : 'Copy code'}</button>
@@ -107,7 +108,7 @@ export default function Converter() {
               </ul>
             </div>
           )}
-          <p className="mt-3 text-xs text-paper/50">Sample result. Real conversions arrive when we connect the converter API.</p>
+          <p className="mt-3 text-xs text-paper/50">This demo code will not work on {result.to}. Real conversions arrive once a converter service is connected.</p>
         </div>
       )}
 
