@@ -51,7 +51,7 @@ await step('OddsPapi: bookmakers and tournaments', async () => {
   const wanted = (Array.isArray(t) ? t : []).filter((x) => /premier league|la ?liga|serie a|bundesliga|ligue 1|eredivisie|primeira/i.test(x.tournamentName || ''))
   fs.writeFileSync(new URL('oddspapi-tournaments.json', OUT), JSON.stringify(wanted, null, 2))
   const id = wanted.find((x) => /premier league/i.test(x.tournamentName) && x.categorySlug === 'england')?.tournamentId || 17
-  save('oddspapi-odds.json', await odds.rawCall('/v4/odds-by-tournaments', { bookmaker: process.env.ODDS_BOOKMAKER || 'pinnacle', tournamentIds: id }))
+  save('oddspapi-odds.json', await odds.rawCall('/v4/odds-by-tournaments', { bookmakers: process.env.ODDS_BOOKMAKER || 'pinnacle', tournamentIds: id }))
 })
 
 console.log('\nDone. Open the files in backend/sample-output/ and send me their contents.')

@@ -4,6 +4,8 @@ import 'dotenv/config'
 import * as football from '../services/apiFootball.js'
 import * as odds from '../services/oddsPapi.js'
 import * as gemini from '../services/gemini.js'
+import { LEAGUES } from '../pipeline/leagues.js'
+import { matchTournament } from '../pipeline/data.js'
 
 const WANTED = ['sporty', 'bet9ja', 'msport', '1xbet', 'bet365', 'betway']
 const matches = (names) => names.filter((n) => WANTED.some((w) => n.toLowerCase().includes(w)))
@@ -37,6 +39,14 @@ await step('Gemini: models your key can use', async () => {
   const want = gemini.MODEL()
   console.log(`  selected GEMINI_MODEL: ${want} -> ${models.includes(want) ? 'available' : 'NOT available, pick one from the list below'}`)
   console.log(`  flash models: ${models.filter((m) => m.includes('flash')).join(', ') || 'none found'}`)
+})
+
+await step('OddsPapi: which of our leagues have odds', async () => {
+  const tournaments = await odds.rawCall('/v4/tournaments', { sportId: odds.SOCCER_SPORT_ID })
+  const ok = [], missing = []
+  for (const l of LEAGUES) (matchTournament(l, tournaments) ? ok : missing).push(`${l.name} (${l.country || 'international'})`)
+  console.log(`  matched ${ok.length} of ${LEAGUES.length}`)
+  if (missing.length) console.log(`  NOT matched (edit pipeline/leagues.js): ${missing.join(', ')}`)
 })
 
 console.log('\nDone.')

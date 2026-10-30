@@ -5,7 +5,7 @@ import { useAuth } from '../AuthContext'
 import Disclaimer from './Disclaimer'
 
 export function dayTabs() {
-  return [-1, 0, 1, 2, 3].map((offset) => {
+  return [-1, 0, 1, 2].map((offset) => {
     const d = new Date()
     d.setDate(d.getDate() + offset)
     const label = offset === -1 ? 'Yesterday' : offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString('en-NG', { weekday: 'long' })
@@ -13,10 +13,7 @@ export function dayTabs() {
   })
 }
 
-const clock = (t) => {
-  const [h, m] = t.split(':').map(Number)
-  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`
-}
+const clock = (iso) => new Date(iso).toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit' })
 
 function Pick({ n, pick, open, onToggle }) {
   return (
@@ -32,10 +29,10 @@ function Pick({ n, pick, open, onToggle }) {
         <div className="border-t border-line p-4 sm:px-6">
           <ul className="divide-y divide-line">
             {pick.games.map((g) => (
-              <li key={g.match} className="py-4">
+              <li key={g.fixtureId ?? g.match} className="py-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs text-brand">{g.league} · {clock(g.t)}</p>
+                    <p className="text-xs text-brand">{g.league} · {clock(g.kickoff)}</p>
                     <p className="font-semibold">{g.match}</p>
                     <p className="text-sm"><span className="text-paper/60">{g.market}:</span> {g.pick}</p>
                   </div>
@@ -76,6 +73,11 @@ export default function PredictionsView({ preview = false }) {
   }, [day, user?.plan])
 
   const current = data?.categories.find((c) => c.odds === cat)
+  const note = data?.sample
+    ? 'Sample data and sample reasoning for design only, using made-up clubs.'
+    : data
+      ? `Odds from ${data.oddsSource || 'the bookmaker'} (pre-match, via OddsPapi) can change before kickoff.${data.generatedAt ? ` Updated ${new Date(data.generatedAt).toLocaleString('en-NG', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}.` : ''}`
+      : ''
 
   if (preview) {
     const free = data?.categories.filter((c) => !c.locked).slice(0, 2) || []
@@ -95,7 +97,7 @@ export default function PredictionsView({ preview = false }) {
           ))}
         </div>
         <Link to="/predictions" className="mt-6 inline-block rounded-lg bg-brand-deep px-5 py-2.5 text-sm font-bold text-white hover:bg-brand">See all predictions</Link>
-        <p className="mt-4 text-xs text-paper/50">Sample data and sample reasoning for design only, using made-up clubs.</p>
+        <p className="mt-4 text-xs text-paper/50">{note}</p>
       </>
     )
   }
@@ -133,7 +135,7 @@ export default function PredictionsView({ preview = false }) {
           {error && <p role="alert" className="mt-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>}
           {loading && !data && <p className="mt-6 text-paper/60">Loading predictions…</p>}
           {current && !current.locked && (current.picks.length === 0
-            ? <p className="mt-6 text-paper/70">No picks available for this category yet.</p>
+            ? <p className="mt-6 text-paper/70">{data.generatedAt ? 'No picks available for this category on this day.' : 'Predictions for this day have not been generated yet.'}</p>
             : <ul className="mt-5 space-y-3">{current.picks.map((p, i) => <Pick key={p.id} n={i + 1} pick={p} open={openId === p.id} onToggle={() => setOpenId(openId === p.id ? null : p.id)} />)}</ul>)}
           {current?.locked && (
             <div className="relative mt-5">
@@ -153,7 +155,7 @@ export default function PredictionsView({ preview = false }) {
         </>
       )}
 
-      <p className="mt-4 text-xs text-paper/50">Sample data and sample reasoning for design only, using made-up clubs.</p>
+      <p className="mt-4 text-xs text-paper/50">{note}</p>
     </>
   )
 }

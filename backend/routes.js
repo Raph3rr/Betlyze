@@ -2,7 +2,9 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import User from './User.js'
-import { CATEGORIES, FREE, samplePicks } from './predictions.js'
+import PredictionSet from './PredictionSet.js'
+import { CATEGORIES, FREE } from './pipeline/leagues.js'
+import { generateForDays, lagosToday, addDays } from './pipeline/generate.js'
 
 const router = Router()
 const FREE_LIMIT = 3
@@ -87,18 +89,30 @@ router.post('/password', auth, handle(async (req, res) => {
   res.json({ ok: true })
 }))
 
-// SAMPLE predictions. Locked categories are decided HERE: free users never receive the games of a locked category.
-router.get('/predictions', optionalAuth, (req, res) => {
-  const day = Math.max(0, Math.min(3, Number(req.query.day) || 0))
-  const d = new Date()
-  d.setDate(d.getDate() + day)
-  const seed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()
+// Real predictions saved by the daily generator. Locked categories are decided HERE:
+// free users never receive the games of a locked category.
+router.get('/predictions', optionalAuth, handle(async (req, res) => {
+  const day = Math.max(0, Math.min(2, Number(req.query.day) || 0))
+  const date = addDays(lagosToday(), day)
+  const set = await PredictionSet.findOne({ date }).lean()
   const pro = req.user?.plan === 'pro'
   const categories = CATEGORIES.map((odds) => {
-    const picks = samplePicks(odds, seed + odds)
+    const picks = set?.categories?.find((c) => c.odds === odds)?.picks || []
     return !FREE.includes(odds) && !pro ? { odds, locked: true, count: picks.length, picks: [] } : { odds, locked: false, picks }
   })
-  res.json({ sample: true, day, categories })
+  res.json({ sample: false, date, generatedAt: set?.generatedAt || null, oddsSource: set?.oddsSource || null, categories })
+}))
+
+// Called once a day by a scheduler (Render cron job or cron-job.org). Needs the x-cron-secret header.
+let generating = false
+router.post('/jobs/generate', (req, res) => {
+  if (!process.env.CRON_SECRET || req.get('x-cron-secret') !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Not allowed.' })
+  if (generating) return res.status(409).json({ error: 'Already running.' })
+  generating = true
+  generateForDays()
+    .catch((e) => console.error('Generation failed:', e.message))
+    .finally(() => { generating = false })
+  res.status(202).json({ started: true })
 })
 
 // MOCK conversion: enforces the daily limit for real, but the result is fake until we connect the converter API.
