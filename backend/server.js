@@ -1,4 +1,6 @@
 import 'dotenv/config'
+import dns from 'node:dns'
+if (process.env.DNS_SERVERS) dns.setServers(process.env.DNS_SERVERS.split(',').map((x) => x.trim()))
 import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'

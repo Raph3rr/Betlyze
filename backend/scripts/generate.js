@@ -1,6 +1,8 @@
 // Run with: npm run generate
 // Builds today's, tomorrow's and the day after's predictions and saves them in MongoDB.
 import 'dotenv/config'
+import dns from 'node:dns'
+if (process.env.DNS_SERVERS) dns.setServers(process.env.DNS_SERVERS.split(',').map((x) => x.trim()))
 import mongoose from 'mongoose'
 import { generateForDays } from '../pipeline/generate.js'
 

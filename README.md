@@ -41,3 +41,10 @@ The server also has a protected endpoint for a daily scheduler:
     POST https://YOUR-BACKEND/api/jobs/generate    header: x-cron-secret: <your CRON_SECRET>
 
 Settings live in `backend/.env` (see `.env.example`). Leagues are listed in `backend/pipeline/leagues.js`.
+
+## Team news (backend settings)
+
+- Injuries and suspensions: always on, one request per league per day.
+- Teams that played the day before: always on.
+- `RECENT_GAMES=true`: game-by-game stats for each team's last 5 games.
+- `LINEUPS=true`: formation and rotation from each team's last 2 lineups (about 6 requests per fixture).

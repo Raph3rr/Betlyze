@@ -115,6 +115,14 @@ router.post('/jobs/generate', (req, res) => {
   res.status(202).json({ started: true })
 })
 
+// DEMO booking: will create a real betslip code once a provider that can do that is connected.
+router.post('/book', auth, handle(async (req, res) => {
+  const { bookie, games } = req.body
+  if (!bookie || !Array.isArray(games) || !games.length || games.length > 12) return res.status(400).json({ error: 'Choose a bookie and at least one game.' })
+  await new Promise((r) => setTimeout(r, 1200))
+  res.json({ demo: true, bookie, code: Math.random().toString(36).slice(2, 9).toUpperCase(), matched: games.length, total: games.length, missing: [] })
+}))
+
 // MOCK conversion: enforces the daily limit for real, but the result is fake until we connect the converter API.
 router.post('/convert', auth, handle(async (req, res) => {
   const { from, to, code = '' } = req.body

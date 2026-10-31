@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar'
 import Home from './pages/Home'
 import Converter from './pages/Converter'
 import Predictions from './pages/Predictions'
+import Book from './pages/Book'
 import Auth from './pages/Auth'
 import Settings from './pages/Settings'
 
@@ -17,6 +18,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/converter" element={<Converter />} />
             <Route path="/predictions" element={<Predictions />} />
+            <Route path="/book" element={<Book />} />
             <Route path="/login" element={<Auth mode="login" />} />
             <Route path="/signup" element={<Auth mode="signup" />} />
             <Route path="/settings" element={<Settings />} />

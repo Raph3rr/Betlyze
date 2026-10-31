@@ -44,7 +44,7 @@ function Pick({ n, pick, open, onToggle }) {
               </li>
             ))}
           </ul>
-          <Link to="/converter" className="mt-2 inline-block rounded-lg bg-brand-deep px-5 py-2.5 text-sm font-bold text-white hover:bg-brand">Book these games</Link>
+          <Link to="/book" state={{ pick }} className="mt-2 inline-block rounded-lg bg-brand-deep px-5 py-2.5 text-sm font-bold text-white hover:bg-brand">Book these games</Link>
         </div>
       )}
     </li>

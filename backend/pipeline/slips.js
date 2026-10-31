@@ -37,3 +37,14 @@ export function buildCandidates(fixtures, target, seed, { tries = 2500, maxLegs 
   }
   return chosen.map((c, i) => ({ id: `c${target}-${i + 1}`, ...c }))
 }
+
+// Builds slips from tier-1 (major) fixtures first and only adds other leagues when there are not enough.
+export function buildTiered(items, target, seed, keep = 8) {
+  const key = (c) => c.legs.map((l) => `${l.fixtureId}:${l.key}`).sort().join('|')
+  let list = buildCandidates(items.filter((i) => i.tier === 1), target, seed, { keep })
+  if (list.length < 5) {
+    const have = new Set(list.map(key))
+    list = [...list, ...buildCandidates(items, target, seed + 1000, { keep }).filter((c) => !have.has(key(c)))].slice(0, keep)
+  }
+  return list.map((c, i) => ({ ...c, id: `c${target}-${i + 1}` }))
+}
