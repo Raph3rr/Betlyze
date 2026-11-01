@@ -136,13 +136,13 @@ function goalsSupported(key, facts) {
   return true
 }
 
-export function legsFor(probs, prices, facts) {
+export function legsFor(probs, prices, facts, sources = {}) {
   const legs = []
   for (const [key, p] of Object.entries(probs)) {
     const odds = prices[key]
     if (!odds || odds < MIN_ODDS || odds > MAX_ODDS || p < MIN_PROB || p * odds < MIN_VALUE) continue
     if (GOALS_KEYS.includes(key) && !goalsSupported(key, facts)) continue
-    legs.push({ key, odds, p })
+    legs.push({ key, odds, p, source: sources[key] })
   }
   return legs
 }

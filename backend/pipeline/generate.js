@@ -4,11 +4,12 @@ import PredictionSet from '../PredictionSet.js'
 import { CATEGORIES, LEAGUES } from './leagues.js'
 import { loadOdds, findOdds } from './data.js'
 import { buildFacts, legsFor, templateWhy, SELECTIONS } from './facts.js'
-import { buildTiered } from './slips.js'
+import { buildTiered, pickDiverse } from './slips.js'
+import { settleDay } from './results.js'
 import { loadInjuries, previousLineups, adjustForAbsences } from './news.js'
 
 const BOOKMAKER_NAMES = { '1xbet': '1xBet', sportybet: 'SportyBet', msport: 'MSport', bet365: 'bet365', betway: 'Betway', pinnacle: 'Pinnacle' }
-const MAX_FIXTURES = Number(process.env.MAX_FIXTURES_PER_DAY) || 20
+const MAX_FIXTURES = Number(process.env.MAX_FIXTURES_PER_DAY) || 40
 
 export const lagosToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
 export const addDays = (ymd, n) => {
@@ -74,7 +75,23 @@ Return only JSON in this shape:
 {"choices":{"2":["c2-1"],"3":[],"5":[],"10":[]},"reasons":[{"fixtureId":123,"selection":"home","why":"..."}]}`
 }
 
-async function generateDay(date, oddsFixtures, slug, playedOn) {
+// Kickoff window in Lagos time: 0 = before 2pm, 1 = 2-6pm, 2 = 6-10pm, 3 = 10pm or later.
+export const bucketOf = (f) => {
+  const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', hourCycle: 'h23' }).format(new Date(f.fixture.timestamp * 1000)))
+  return h < 14 ? 0 : h < 18 ? 1 : h < 22 ? 2 : 3
+}
+
+// Takes games in league order, but rotates through the four kickoff windows so night games are never squeezed out.
+export function spread(list, limit) {
+  const q = [[], [], [], []]
+  for (const x of [...list].sort((a, b) => a.rank - b.rank || a.f.fixture.timestamp - b.f.fixture.timestamp)) q[bucketOf(x.f)].push(x)
+  const out = []
+  while (out.length < limit && q.some((b) => b.length)) for (const b of q) if (b.length && out.length < limit) out.push(b.shift())
+  return out
+}
+
+async function generateDay(date, oddsFixtures, slugs, playedOn) {
+  const slugLabel = slugs.join('/')
   console.log(`\n== ${date}`)
   const all = (await football.getFixtures(date)).response
   playedOn.set(date, new Set(all.flatMap((f) => [f.teams.home.id, f.teams.away.id])))
@@ -83,13 +100,14 @@ async function generateDay(date, oddsFixtures, slug, playedOn) {
   const upcoming = ours.filter((f) => f.fixture.status.short === 'NS')
   const matched = upcoming.map((f) => ({ f, tier: league.get(f.league.id).tier, odds: findOdds(f, oddsFixtures) }))
   const noOdds = matched.filter((x) => !x.odds && x.tier === 1)
-  if (noOdds.length) console.log(`  major-league games with no ${slug} odds match (${noOdds.length}): ${noOdds.slice(0, 8).map((x) => `${x.f.teams.home.name} vs ${x.f.teams.away.name}`).join('; ')}`)
-  const usable = matched
-    .filter((x) => x.odds)
-    .sort((a, b) => a.tier - b.tier || a.f.fixture.timestamp - b.f.fixture.timestamp)
-    .slice(0, MAX_FIXTURES)
-  console.log(`  tier 1 (major) games used: ${usable.filter((x) => x.tier === 1).length}, tier 2: ${usable.filter((x) => x.tier === 2).length}`)
-  console.log(`  ${all.length} fixtures that day: ${ours.length} in our leagues, ${upcoming.length} not started, ${usable.length} with ${slug} odds (max ${MAX_FIXTURES})`)
+  if (noOdds.length) console.log(`  major-league games with no ${slugLabel} odds match (${noOdds.length}): ${noOdds.slice(0, 8).map((x) => `${x.f.teams.home.name} vs ${x.f.teams.away.name}`).join('; ')}`)
+  // Major leagues first (every game that has odds, up to the cap), then other leagues fill the rest.
+  const withOdds = matched.filter((x) => x.odds).map((x) => ({ ...x, rank: LEAGUES.findIndex((l) => l.id === x.f.league.id) }))
+  const majors = spread(withOdds.filter((x) => x.tier === 1), MAX_FIXTURES)
+  const usable = [...majors, ...spread(withOdds.filter((x) => x.tier !== 1), MAX_FIXTURES - majors.length)]
+  console.log(`  major-league games with odds: ${withOdds.filter((x) => x.tier === 1).length}, used: ${majors.length}. Other leagues used: ${usable.length - majors.length}`)
+  console.log(`  kickoff spread used (before 2pm / 2-6pm / 6-10pm / after 10pm, Lagos time): ${[0, 1, 2, 3].map((k) => usable.filter((x) => bucketOf(x.f) === k).length).join(' / ')}`)
+  console.log(`  ${all.length} fixtures that day: ${ours.length} in our leagues, ${upcoming.length} not started, ${usable.length} with ${slugLabel} odds (max ${MAX_FIXTURES})`)
 
   // 1) predictions (and recent games if needed)
   const wantRecent = process.env.RECENT_GAMES === 'true' || process.env.LINEUPS === 'true'
@@ -112,7 +130,7 @@ async function generateDay(date, oddsFixtures, slug, playedOn) {
   }
 
   // 2) absences for those fixtures: one request per league
-  const absencesOf = staged.length ? await loadInjuries(staged.map((s) => s.f), date) : () => null
+  const absencesOf = process.env.INJURIES === 'true' && staged.length ? await loadInjuries(staged.map((s) => s.f), date) : () => null
 
   // 3) facts, probabilities and usable selections
   const dayBefore = playedOn.get(addDays(date, -1))
@@ -124,7 +142,7 @@ async function generateDay(date, oddsFixtures, slug, playedOn) {
       previousLineups: process.env.LINEUPS === 'true' ? await previousLineups(f, recent) : null,
     }
     const { facts, probs } = buildFacts(pred, f, recent, news)
-    const legs = legsFor(adjustForAbsences(probs, news.absences), odds.prices, facts)
+    const legs = legsFor(adjustForAbsences(probs, news.absences), odds.prices, facts, odds.sources)
     facts.league = league.get(f.league.id).label
     if (legs.length) items.push({ fixtureId: f.fixture.id, f, facts, legs, tier: league.get(f.league.id).tier })
   }
@@ -143,17 +161,17 @@ async function generateDay(date, oddsFixtures, slug, playedOn) {
 
   const categories = CATEGORIES.map((c) => {
     const byId = new Map(candidates[c].map((x) => [x.id, x]))
-    let ids = (Array.isArray(ai?.choices?.[c]) ? ai.choices[c] : []).filter((id, i, a) => byId.has(id) && a.indexOf(id) === i).slice(0, 5)
-    ids = [...ids, ...candidates[c].map((x) => x.id).filter((id) => !ids.includes(id))].slice(0, 5) // top up from our ranking
-    const picks = ids.map((id, n) => {
-      const cand = byId.get(id)
+    const aiIds = (Array.isArray(ai?.choices?.[c]) ? ai.choices[c] : []).filter((id, i, a) => byId.has(id) && a.indexOf(id) === i)
+    const order = [...aiIds, ...candidates[c].map((x) => x.id).filter((id) => !aiIds.includes(id))].map((id) => byId.get(id))
+    const picks = pickDiverse(order, 5).map((cand, n) => {
       const games = cand.legs.map((leg) => {
         const it = byFixture.get(leg.fixtureId)
         const [market, pick] = SELECTIONS[leg.key]
         const pct = clamp(Math.round(leg.p * 100), 50, 92)
         const ai_why = reasons.get(`${leg.fixtureId}|${leg.key}`)
         return {
-          fixtureId: leg.fixtureId, league: it.facts.league, match: `${it.f.teams.home.name} vs ${it.f.teams.away.name}`,
+          fixtureId: leg.fixtureId, key: leg.key, leagueId: it.f.league.id, bookmaker: BOOKMAKER_NAMES[leg.source] || leg.source || null,
+          league: it.facts.league, match: `${it.f.teams.home.name} vs ${it.f.teams.away.name}`,
           market, pick, odds: leg.odds, kickoff: it.f.fixture.date,
           conf: pct >= 75 ? 'High' : pct >= 60 ? 'Medium' : 'Low', pct,
           why: grounded(ai_why, it.facts) ? ai_why : templateWhy(leg, it.facts),
@@ -168,7 +186,7 @@ async function generateDay(date, oddsFixtures, slug, playedOn) {
 
   await PredictionSet.findOneAndUpdate(
     { date },
-    { date, generatedAt: new Date(), oddsSource: BOOKMAKER_NAMES[slug] || slug, fixtureCount: items.length, categories },
+    { date, generatedAt: new Date(), oddsSource: slugs.map((x) => BOOKMAKER_NAMES[x] || x).join(', '), fixtureCount: items.length, categories },
     { upsert: true },
   )
   console.log('  saved:', categories.map((c) => `${c.odds} odds: ${c.picks.length} picks`).join(', '))
@@ -183,17 +201,22 @@ export async function generateForDays(offsets = [0, 1, 2]) {
   } catch (e) { console.log('Could not read API-Football quota:', e.message) }
   console.log(`API-Football request budget for this run: ${football.budget.limit}`)
 
-  const slug = process.env.ODDS_BOOKMAKER || '1xbet'
-  const oddsFixtures = await loadOdds(slug)
-  console.log(`OddsPapi: ${oddsFixtures.length} upcoming fixtures with ${slug} prices`)
-  if (!oddsFixtures.length) throw new Error(`No ${slug} odds could be loaded, so nothing was generated and your saved predictions were left alone. Check the messages above, or try another ODDS_BOOKMAKER.`)
+  const slugs = (process.env.ODDS_BOOKMAKERS || process.env.ODDS_BOOKMAKER || '1xbet,bet365,pinnacle').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 3)
+  const slugLabel = slugs.join(', ')
+
+  // Check yesterday's picks against the real scores first (this also tells us who played yesterday)
   const playedOn = new Map()
+  const y = addDays(lagosToday(), -1)
   try {
-    const y = addDays(lagosToday(), -1)
-    playedOn.set(y, new Set((await football.getFixtures(y)).response.flatMap((f) => [f.teams.home.id, f.teams.away.id])))
-  } catch (e) { console.log(`  could not load yesterday's fixtures (rest info skipped): ${e.message}`) }
+    const yesterday = await settleDay(y)
+    playedOn.set(y, new Set(yesterday.flatMap((f) => [f.teams.home.id, f.teams.away.id])))
+  } catch (e) { console.log(`  could not check yesterday's results: ${e.message}`) }
+
+  const oddsFixtures = await loadOdds(slugs)
+  console.log(`OddsPapi: ${oddsFixtures.length} upcoming fixtures with prices from ${slugLabel}`)
+  if (!oddsFixtures.length) throw new Error(`No odds could be loaded from ${slugLabel}, so nothing was generated and your saved predictions were left alone. Check the messages above.`)
   for (const off of offsets) {
-    try { await generateDay(addDays(lagosToday(), off), oddsFixtures, slug, playedOn) } catch (e) { console.log(/access to this date/i.test(e.message) ? `  skipped: your API-Football plan cannot see this date (${e.message})` : `  day failed: ${e.message}`) }
+    try { await generateDay(addDays(lagosToday(), off), oddsFixtures, slugs, playedOn) } catch (e) { console.log(/access to this date/i.test(e.message) ? `  skipped: your API-Football plan cannot see this date (${e.message})` : `  day failed: ${e.message}`) }
   }
   console.log('\nFinished.')
 }

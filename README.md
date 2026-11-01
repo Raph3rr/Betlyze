@@ -48,3 +48,10 @@ Settings live in `backend/.env` (see `.env.example`). Leagues are listed in `bac
 - Teams that played the day before: always on.
 - `RECENT_GAMES=true`: game-by-game stats for each team's last 5 games.
 - `LINEUPS=true`: formation and rotation from each team's last 2 lineups (about 6 requests per fixture).
+
+## Results
+
+    npm run settle                 # checks yesterday's saved picks against the real final scores (1 API-Football request)
+    npm run settle -- 2026-10-31   # a specific day
+
+`npm run generate` also settles yesterday first. The Yesterday tab on the site then shows Won / Lost on each pick and the final score of each game.

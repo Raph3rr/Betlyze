@@ -8,7 +8,8 @@
     "dev": "node --watch server.js",
     "check-keys": "node scripts/checkKeys.js",
     "sample": "node scripts/sample.js",
-    "generate": "node scripts/generate.js"
+    "generate": "node scripts/generate.js",
+    "settle": "node scripts/settle.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

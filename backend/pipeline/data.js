@@ -52,25 +52,56 @@ export function buildMarketIndex(markets) {
   return idx
 }
 
-function reduceFixture(f, slug, idx, names) {
-  const b = f.bookmakerOdds?.[slug]
-  if (!b || b.bookmakerIsActive === false || b.suspended) return null
-  const prices = {}
-  for (const [key, ref] of Object.entries(idx)) {
-    if (!ref || ref[1] == null) continue
-    const market = b.markets?.[ref[0]]
-    const p = market?.outcomes?.[ref[1]]?.players?.['0']
-    if (market && market.marketActive !== false && p && p.active !== false && p.price > 1) prices[key] = p.price
+// For every market we take the first bookmaker (in priority order) that has a price for it.
+function reduceFixture(f, slugs, idx, names) {
+  const prices = {}, sources = {}
+  for (const slug of slugs) {
+    const b = f.bookmakerOdds?.[slug]
+    if (!b || b.bookmakerIsActive === false || b.suspended) continue
+    for (const [key, ref] of Object.entries(idx)) {
+      if (prices[key] || !ref || ref[1] == null) continue
+      const market = b.markets?.[ref[0]]
+      const p = market?.outcomes?.[ref[1]]?.players?.['0']
+      if (market && market.marketActive !== false && p && p.active !== false && p.price > 1) { prices[key] = p.price; sources[key] = slug }
+    }
   }
   if (!Object.keys(prices).length) return null
-  return { id: f.fixtureId, home: names[f.participant1Id], away: names[f.participant2Id], start: Date.parse(f.startTime), prices }
+  return { id: f.fixtureId, home: names[f.participant1Id], away: names[f.participant2Id], start: Date.parse(f.startTime), prices, sources }
 }
 
 // OddsPapi lists can arrive as an array or as an object of items; accept both.
 const toList = (x) => (Array.isArray(x) ? x : Array.isArray(x?.data) ? x.data : x && typeof x === 'object' ? Object.values(x) : [])
 
-// Loads every upcoming fixture (with the bookmaker's prices) for the leagues we cover. Cached for 3 hours.
-export async function loadOdds(slug) {
+// Asks for up to 3 bookmakers at once. If OddsPapi rejects the combination, asks for each one separately.
+async function fetchGroup(ids, slugs) {
+  const ask = async (list) => {
+    const data = await odds.rawCall('/v4/odds-by-tournaments', { bookmakers: list.join(','), tournamentIds: ids.join(',') })
+    return Array.isArray(data) ? data : data?.fixtureId ? [data] : []
+  }
+  try {
+    return await ask(slugs)
+  } catch (e) {
+    if (!/Invalid bookmaker/.test(e.message)) throw e
+  }
+  const merged = new Map()
+  for (const slug of slugs) {
+    await sleep(1100)
+    try {
+      for (const f of await ask([slug])) {
+        const have = merged.get(f.fixtureId)
+        if (have) Object.assign(have.bookmakerOdds, f.bookmakerOdds)
+        else merged.set(f.fixtureId, f)
+      }
+    } catch (e) {
+      console.log(`  ${slug} has no fixtures for tournaments ${ids.join(',')} (skipped)`)
+    }
+  }
+  return [...merged.values()]
+}
+
+// Loads every upcoming fixture (with prices from up to 3 bookmakers) for the leagues we cover. Cached for 3 hours.
+export async function loadOdds(slugs) {
+  slugs = slugs.slice(0, 3) // OddsPapi allows at most 3 bookmakers per request
   let tournaments = toList(await odds.getTournaments())
   if (!tournaments[0]?.tournamentId) tournaments = toList(await odds.rawCall('/v4/tournaments', { sportId: odds.SOCCER_SPORT_ID })) // bad cache: fetch fresh
   const ids = []
@@ -84,16 +115,15 @@ export async function loadOdds(slug) {
   if (!marketList[0]?.marketId) throw new Error(`OddsPapi /v4/markets returned an unexpected shape: ${JSON.stringify(marketList).slice(0, 200)}`)
   const idx = buildMarketIndex(marketList)
   console.log(`  OddsPapi markets found: ${Object.keys(idx).join(', ')}`)
-  return odds.cachedReduced(`reduced:${slug}:${ids.join(',')}`, async () => {
+  return odds.cachedReduced(`reduced2:${slugs.join('+')}:${ids.join(',')}`, async () => {
     const names = await odds.getParticipants()
     const out = []
     for (let i = 0; i < ids.length; i += 5) {
+      const group = ids.slice(i, i + 5)
       try {
-        const data = await odds.rawCall('/v4/odds-by-tournaments', { bookmakers: slug, tournamentIds: ids.slice(i, i + 5).join(',') })
-        for (const f of Array.isArray(data) ? data : data?.fixtureId ? [data] : []) { const r = reduceFixture(f, slug, idx, names); if (r) out.push(r) }
+        for (const f of await fetchGroup(group, slugs)) { const r = reduceFixture(f, slugs, idx, names); if (r) out.push(r) }
       } catch (e) {
-        const group = ids.slice(i, i + 5).join(',')
-        console.log(/Invalid bookmaker/.test(e.message) ? `  ${slug} has no fixtures for tournaments ${group} (skipped)` : `  odds request for tournaments ${group} failed: ${e.message}`)
+        console.log(`  odds request for tournaments ${group.join(',')} failed: ${e.message}`)
       }
       await sleep(1100) // OddsPapi allows one request a second per endpoint
     }

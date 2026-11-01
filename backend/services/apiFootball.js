@@ -42,7 +42,7 @@ export const getHeadToHead = (teamA, teamB, last = 10) => call('/fixtures/headto
 export const getTeamLast = (team, last = 5) => call('/fixtures', { team, last, timezone: 'Africa/Lagos' }, 12 * HOUR)
 export const getInjuries = (league, season, date) => call('/injuries', { league, season, date, timezone: 'Africa/Lagos' }, 3 * HOUR)
 export const getLineups = (fixture) => call('/fixtures/lineups', { fixture }, 30 * 24 * HOUR) // past lineups never change
-export const getPrediction = (fixture) => call('/predictions', { fixture }, 12 * HOUR)
+export const getPrediction = (fixture) => call('/predictions', { fixture }, 36 * HOUR)
 export const getStandings = (league, season) => call('/standings', { league, season }, 12 * HOUR)
 export const getOdds = (fixture) => call('/odds', { fixture }, 6 * HOUR)
 export const getBookmakers = () => call('/odds/bookmakers', {}, 7 * 24 * HOUR)

@@ -23,7 +23,14 @@ function Pick({ n, pick, open, onToggle }) {
           <p className="font-display text-lg font-bold">Pick {n}</p>
           <p className="text-sm text-paper/60">Starts {clock(pick.start)} · {pick.games.length} {pick.games.length === 1 ? 'game' : 'games'}</p>
         </div>
-        <span className="rounded-lg bg-brand/15 px-3 py-1 font-display font-bold text-brand">{pick.odds.toFixed(2)} odds</span>
+        <div className="flex items-center gap-2">
+          {pick.result && pick.result !== 'pending' && (
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold uppercase ${pick.result === 'won' ? 'bg-brand/20 text-brand' : pick.result === 'lost' ? 'bg-red-500/15 text-red-300' : 'bg-line text-paper/70'}`}>
+              {pick.result === 'won' ? 'Won' : pick.result === 'lost' ? 'Lost' : 'Void'}
+            </span>
+          )}
+          <span className="rounded-lg bg-brand/15 px-3 py-1 font-display font-bold text-brand">{pick.odds.toFixed(2)} odds</span>
+        </div>
       </button>
       {open && (
         <div className="border-t border-line p-4 sm:px-6">
@@ -36,7 +43,11 @@ function Pick({ n, pick, open, onToggle }) {
                     <p className="font-semibold">{g.match}</p>
                     <p className="text-sm"><span className="text-paper/60">{g.market}:</span> {g.pick}</p>
                   </div>
-                  <span className="font-semibold">{g.odds.toFixed(2)}</span>
+                  <div className="text-right">
+                    <span className="font-semibold">{g.odds.toFixed(2)}</span>
+                    {g.bookmaker && <p className="text-xs text-paper/50">{g.bookmaker}</p>}
+                    {g.score && <p className={`mt-1 text-xs font-bold ${g.status === 'won' ? 'text-brand' : 'text-red-300'}`}>{g.score.home}-{g.score.away} {g.status === 'won' ? '✓' : '✗'}</p>}
+                  </div>
                 </div>
                 <p className="mt-2 text-sm text-paper/70">
                   <span className="font-semibold text-paper">Why the AI chose this ({g.conf} confidence, {g.pct}%): </span>{g.why}
@@ -62,7 +73,6 @@ export default function PredictionsView({ preview = false }) {
   const [openId, setOpenId] = useState(null)
 
   useEffect(() => {
-    if (day === 0) return setData(null)
     let live = true
     setLoading(true); setError(''); setOpenId(null)
     api(`/api/predictions?day=${day - 1}`)
@@ -76,7 +86,7 @@ export default function PredictionsView({ preview = false }) {
   const note = data?.sample
     ? 'Sample data and sample reasoning for design only, using made-up clubs.'
     : data
-      ? `Odds from ${data.oddsSource || 'the bookmaker'} (pre-match, via OddsPapi) can change before kickoff.${data.generatedAt ? ` Updated ${new Date(data.generatedAt).toLocaleString('en-NG', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}.` : ''}`
+      ? `Odds are pre-match prices (via OddsPapi) from the bookmaker named on each game, and can change before kickoff.${data.generatedAt ? ` Updated ${new Date(data.generatedAt).toLocaleString('en-NG', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}.` : ''}`
       : ''
 
   if (preview) {
@@ -115,18 +125,15 @@ export default function PredictionsView({ preview = false }) {
         ))}
       </div>
 
-      {day === 0 ? (
-        <p className="mt-6 rounded-2xl border border-line bg-panel p-6 text-paper/70">
-          Yesterday’s results show here once the games finish, so you can check every pick against the final score.
-        </p>
-      ) : (
+      {day === 0 && <p className="mt-5 text-sm text-paper/70">Yesterday’s picks, checked against the final scores (90 minutes, as bookmakers settle).</p>}
+      {(
         <>
           {data && (
             <div className="mt-4 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Odds categories">
               {data.categories.map((c) => (
                 <button key={c.odds} role="tab" aria-selected={cat === c.odds} onClick={() => { setCat(c.odds); setOpenId(null) }}
                   className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-semibold ${cat === c.odds ? 'border-brand bg-brand/15 text-brand' : 'border-line text-paper/70 hover:border-brand'}`}>
-                  {c.odds} odds{c.locked && <span className="ml-1.5 text-xs font-normal text-paper/50">Pro</span>}
+                  {c.odds} odds{c.locked && <span className="ml-1.5 text-xs font-normal text-paper/50">Pro</span>}{day === 0 && c.record && c.record.won + c.record.lost > 0 && <span className="ml-1.5 text-xs font-normal text-paper/60">{c.record.won}/{c.record.won + c.record.lost} won</span>}
                 </button>
               ))}
             </div>

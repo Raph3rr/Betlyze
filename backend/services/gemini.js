@@ -49,7 +49,7 @@ export async function generateJson(prompt, { retries = 2, maxOutputTokens = 8192
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens },
       }),
-    }, { name: 'Gemini', timeoutMs: 120000, tries: 1 })
+    }, { name: 'Gemini', timeoutMs: 120000, tries: 3 })
     if (res.ok) {
       const data = await res.json()
       const parts = data.candidates?.[0]?.content?.parts || []

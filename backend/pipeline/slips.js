@@ -48,3 +48,18 @@ export function buildTiered(items, target, seed, keep = 8) {
   }
   return list.map((c, i) => ({ ...c, id: `c${target}-${i + 1}` }))
 }
+
+const sharedGames = (a, b) => a.legs.filter((l) => b.legs.some((m) => m.fixtureId === l.fixtureId)).length
+
+// Picks up to `want` slips in the given order, preferring slips that share NO game with an earlier pick
+// (one lost game then cannot sink several picks). Sharing is only allowed when there is no other way.
+export function pickDiverse(order, want = 5) {
+  const chosen = []
+  for (const maxShared of [0, 1, 2, 99]) {
+    for (const c of order) {
+      if (chosen.length >= want) return chosen
+      if (!chosen.includes(c) && chosen.every((o) => sharedGames(o, c) <= maxShared)) chosen.push(c)
+    }
+  }
+  return chosen
+}

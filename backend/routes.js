@@ -92,13 +92,14 @@ router.post('/password', auth, handle(async (req, res) => {
 // Real predictions saved by the daily generator. Locked categories are decided HERE:
 // free users never receive the games of a locked category.
 router.get('/predictions', optionalAuth, handle(async (req, res) => {
-  const day = Math.max(0, Math.min(2, Number(req.query.day) || 0))
+  const day = Math.max(-1, Math.min(2, Number(req.query.day) || 0))
   const date = addDays(lagosToday(), day)
   const set = await PredictionSet.findOne({ date }).lean()
   const pro = req.user?.plan === 'pro'
   const categories = CATEGORIES.map((odds) => {
     const picks = set?.categories?.find((c) => c.odds === odds)?.picks || []
-    return !FREE.includes(odds) && !pro ? { odds, locked: true, count: picks.length, picks: [] } : { odds, locked: false, picks }
+    const record = { won: picks.filter((p) => p.result === 'won').length, lost: picks.filter((p) => p.result === 'lost').length, pending: picks.filter((p) => !p.result || p.result === 'pending').length, total: picks.length }
+    return !FREE.includes(odds) && !pro ? { odds, locked: true, count: picks.length, record, picks: [] } : { odds, locked: false, record, picks }
   })
   res.json({ sample: false, date, generatedAt: set?.generatedAt || null, oddsSource: set?.oddsSource || null, categories })
 }))
