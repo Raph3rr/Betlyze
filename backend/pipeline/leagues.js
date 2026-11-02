@@ -1,5 +1,5 @@
 export const CATEGORIES = [2, 3, 5, 10]
-export const FREE = [2, 3]
+export const FREE = [2] // only the 2-odds level is free; 3, 5 and 10 odds are Pro
 
 // id = API-Football league id. label = the full name shown to users. tier 1 = headline leagues and cups. tier 2 = fills the quiet days so every day has games.
 // `odds` is a pattern for the OddsPapi tournament name when it differs from `name`. `country` must match OddsPapi's category.
@@ -31,7 +31,6 @@ export const LEAGUES = [
   { id: 203, label: 'Turkish Süper Lig', name: 'Süper Lig', country: 'Turkey', tier: 2, odds: /s[uü]per lig/i },
   { id: 179, label: 'Scottish Premiership', name: 'Premiership', country: 'Scotland', tier: 2 },
   { id: 144, label: 'Belgian Pro League', name: 'Pro League', country: 'Belgium', tier: 2, odds: /pro league/i },
-  { id: 253, label: 'American MLS', name: 'Major League Soccer', country: 'USA', tier: 2, odds: /major league soccer|^mls$/i },
   { id: 71, label: 'Brazilian Serie A', name: 'Serie A', country: 'Brazil', tier: 2, odds: /^brasileiro serie a$/i },
   { id: 262, label: 'Mexican Liga MX', name: 'Liga MX', country: 'Mexico', tier: 2, odds: /liga mx/i },
   { id: 307, label: 'Saudi Pro League', name: 'Pro League', country: 'Saudi Arabia', tier: 2, odds: /pro league/i },

@@ -76,6 +76,15 @@ Return only JSON in this shape:
 }
 
 // Kickoff window in Lagos time: 0 = before 2pm, 1 = 2-6pm, 2 = 6-10pm, 3 = 10pm or later.
+// Only games that kick off inside this window (Lagos time) are used, so nobody has to stay up for a 1am kickoff.
+const WINDOW = (process.env.KICKOFF_WINDOW || '06:00-22:30').split('-')
+const toMinutes = (t) => { const [h, m = 0] = t.split(':').map(Number); return h * 60 + m }
+const lagosMinutes = (f) => {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(f.fixture.timestamp * 1000))
+  return Number(parts.find((p) => p.type === 'hour').value) * 60 + Number(parts.find((p) => p.type === 'minute').value)
+}
+export const inWindow = (f) => { const m = lagosMinutes(f); return m >= toMinutes(WINDOW[0]) && m <= toMinutes(WINDOW[1]) }
+
 export const bucketOf = (f) => {
   const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', hourCycle: 'h23' }).format(new Date(f.fixture.timestamp * 1000)))
   return h < 14 ? 0 : h < 18 ? 1 : h < 22 ? 2 : 3
@@ -96,8 +105,17 @@ async function generateDay(date, oddsFixtures, slugs, playedOn) {
   const all = (await football.getFixtures(date)).response
   playedOn.set(date, new Set(all.flatMap((f) => [f.teams.home.id, f.teams.away.id])))
   const league = new Map(LEAGUES.map((l) => [l.id, l]))
+  // A day's picks are created once. Later runs never replace them, so they stay complete all day.
+  const existing = await PredictionSet.findOne({ date }).lean()
+  if (existing?.categories?.some((c) => (c.picks || []).length) && process.env.FORCE_REGENERATE !== 'true') {
+    console.log(`  picks for ${date} already exist, so they are locked and left untouched (FORCE_REGENERATE=true rebuilds them)`)
+    return
+  }
+
   const ours = all.filter((f) => league.has(f.league.id))
-  const upcoming = ours.filter((f) => f.fixture.status.short === 'NS')
+  const notStarted = ours.filter((f) => f.fixture.status.short === 'NS')
+  const upcoming = notStarted.filter(inWindow)
+  if (notStarted.length > upcoming.length) console.log(`  ${notStarted.length - upcoming.length} games skipped: kickoff outside ${WINDOW.join(' to ')} (Lagos time)`)
   const matched = upcoming.map((f) => ({ f, tier: league.get(f.league.id).tier, odds: findOdds(f, oddsFixtures) }))
   const noOdds = matched.filter((x) => !x.odds && x.tier === 1)
   if (noOdds.length) console.log(`  major-league games with no ${slugLabel} odds match (${noOdds.length}): ${noOdds.slice(0, 8).map((x) => `${x.f.teams.home.name} vs ${x.f.teams.away.name}`).join('; ')}`)
@@ -199,7 +217,8 @@ async function generateDay(date, oddsFixtures, slugs, playedOn) {
 }
 
 // Generates today, tomorrow and the day after (Lagos dates).
-export async function generateForDays(offsets = [0, 1, 2]) {
+// DAYS_AHEAD=1 means today and tomorrow (all a free API-Football plan can see). Use 2 on a paid plan.
+export async function generateForDays(offsets = Array.from({ length: (Number(process.env.DAYS_AHEAD ?? 1) || 0) + 1 }, (_, i) => i)) {
   football.budget.used = 0
   try {
     const { requests } = (await football.rawCall('/status')).response
@@ -218,6 +237,14 @@ export async function generateForDays(offsets = [0, 1, 2]) {
     playedOn.set(y, new Set(yesterday.flatMap((f) => [f.teams.home.id, f.teams.away.id])))
   } catch (e) { console.log(`  could not check yesterday's results: ${e.message}`) }
   try { await settleDay(addDays(lagosToday(), -2), { onlyIfPending: true }) } catch (e) { console.log(`  could not re-check the day before yesterday: ${e.message}`) }
+
+  const open = []
+  for (const off of offsets) {
+    const d = addDays(lagosToday(), off)
+    const ex = await PredictionSet.findOne({ date: d }).lean()
+    if (!ex?.categories?.some((c) => (c.picks || []).length) || process.env.FORCE_REGENERATE === 'true') open.push(d)
+  }
+  if (!open.length) { console.log('Every day already has picks (locked), nothing to generate.\n\nFinished.'); return }
 
   const oddsFixtures = await loadOdds(slugs)
   console.log(`OddsPapi: ${oddsFixtures.length} upcoming fixtures with prices from ${slugLabel}`)

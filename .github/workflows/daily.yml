@@ -1,0 +1,48 @@
+name: Daily predictions
+
+# Runs every morning at 06:00 Lagos time (05:00 UTC):
+# 1) checks yesterday's picks against the real final scores
+# 2) creates today's and tomorrow's picks if they do not exist yet (existing days are never replaced)
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Rebuild picks even if the day already has them. Only tick this BEFORE the first kickoff of that day.'
+        type: boolean
+        default: false
+
+concurrency:
+  group: daily-predictions
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install packages
+        run: npm install --no-audit --no-fund
+      - name: Settle yesterday and generate new picks
+        run: npm run generate
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          ODDSPAPI_KEY: ${{ secrets.ODDSPAPI_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-3.5-flash
+          ODDS_BOOKMAKERS: 1xbet,bet365,pinnacle
+          MAX_FIXTURES_PER_DAY: '40'
+          API_FOOTBALL_BUDGET: '90'
+          API_FOOTBALL_MIN_INTERVAL_MS: '6500'
+          KICKOFF_WINDOW: '06:00-22:30'
+          DAYS_AHEAD: '1'
+          FORCE_REGENERATE: ${{ inputs.force && 'true' || 'false' }}

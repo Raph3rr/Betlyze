@@ -21,7 +21,7 @@ function Pick({ n, pick, open, onToggle }) {
       <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center justify-between gap-4 p-4 text-left sm:px-6">
         <div>
           <p className="font-display text-lg font-bold">Pick {n}</p>
-          <p className="text-sm text-paper/60">Starts {clock(pick.start)} · {pick.games.length} {pick.games.length === 1 ? 'game' : 'games'}{pick.chance != null && <> · est. {pick.chance}% chance all win</>}</p>
+          <p className="text-sm text-paper/60">Starts {clock(pick.start)} · {pick.games.length} {pick.games.length === 1 ? 'game' : 'games'}</p>
         </div>
         <div className="flex items-center gap-2">
           {pick.result && pick.result !== 'pending' && (
@@ -100,8 +100,8 @@ export default function PredictionsView({ preview = false }) {
           {free.map((c) => c.picks[0] && (
             <section key={c.odds}>
               <p className="text-sm font-semibold text-paper/60">{c.odds} odds · free today</p>
-              <ul className="mt-2">
-                <Pick n={1} pick={c.picks[0]} open={openId === c.picks[0].id} onToggle={() => setOpenId(openId === c.picks[0].id ? null : c.picks[0].id)} />
+              <ul className="mt-2 space-y-3">
+                {c.picks.slice(0, 2).map((p, i) => <Pick key={p.id} n={i + 1} pick={p} open={openId === p.id} onToggle={() => setOpenId(openId === p.id ? null : p.id)} />)}
               </ul>
             </section>
           ))}
@@ -142,7 +142,7 @@ export default function PredictionsView({ preview = false }) {
           {error && <p role="alert" className="mt-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>}
           {loading && !data && <p className="mt-6 text-paper/60">Loading predictions…</p>}
           {current && !current.locked && (current.picks.length === 0
-            ? <p className="mt-6 text-paper/70">{data.generatedAt ? 'No picks available for this category on this day.' : 'Predictions for this day have not been generated yet.'}</p>
+            ? <p className="mt-6 text-paper/70">{data.generatedAt ? `${data.pro ? 'You have Pro access, but no' : 'No'} picks were generated for this category on this day.` : 'Predictions for this day have not been generated yet.'}</p>
             : <ul className="mt-5 space-y-3">{current.picks.map((p, i) => <Pick key={p.id} n={i + 1} pick={p} open={openId === p.id} onToggle={() => setOpenId(openId === p.id ? null : p.id)} />)}</ul>)}
           {current?.locked && (
             <div className="relative mt-5">

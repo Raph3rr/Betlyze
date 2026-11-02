@@ -105,7 +105,7 @@ router.get('/predictions', optionalAuth, handle(async (req, res) => {
     const record = { won: picks.filter((p) => p.result === 'won').length, lost: picks.filter((p) => p.result === 'lost').length, pending: picks.filter((p) => !p.result || p.result === 'pending').length, total: picks.length }
     return !FREE.includes(odds) && !pro ? { odds, locked: true, count: picks.length, record, picks: [] } : { odds, locked: false, record, picks }
   })
-  res.json({ sample: false, date, generatedAt: set?.generatedAt || null, oddsSource: set?.oddsSource || null, categories })
+  res.json({ sample: false, pro, date, generatedAt: set?.generatedAt || null, oddsSource: set?.oddsSource || null, categories })
 }))
 
 // Called once a day by a scheduler (Render cron job or cron-job.org). Needs the x-cron-secret header.
