@@ -51,15 +51,49 @@ export function buildTiered(items, target, seed, keep = 8) {
 
 const sharedGames = (a, b) => a.legs.filter((l) => b.legs.some((m) => m.fixtureId === l.fixtureId)).length
 
-// Picks up to `want` slips in the given order, preferring slips that share NO game with an earlier pick
-// (one lost game then cannot sink several picks). Sharing is only allowed when there is no other way.
-export function pickDiverse(order, want = 5) {
-  const chosen = []
-  for (const maxShared of [0, 1, 2, 99]) {
-    for (const c of order) {
-      if (chosen.length >= want) return chosen
-      if (!chosen.includes(c) && chosen.every((o) => sharedGames(o, c) <= maxShared)) chosen.push(c)
-    }
+// Lowest chance a single game may have to enter a pick of that odds level. Lower odds levels must be safer.
+// If there are not enough games that clear the bar, the bar is lowered step by step (never below 50%).
+const MIN_LEG_PROB = { 2: 0.7, 3: 0.68, 5: 0.65, 10: 0.6 }
+
+export function buildSafest(items, target, seed) {
+  const base = MIN_LEG_PROB[target] ?? 0.6
+  let best = []
+  for (let minP = base; minP >= 0.5 - 1e-9; minP -= 0.05) {
+    const pool = items.map((i) => ({ ...i, legs: i.legs.filter((l) => l.p >= minP) })).filter((i) => i.legs.length)
+    const list = buildTiered(pool, target, seed)
+    if (list.length >= 5) return list
+    if (list.length > best.length) best = list
   }
+  return best
+}
+
+// Picks up to `want` slips in the given order. Preference order:
+//  1) no game shared with an earlier pick of this level AND no game already used elsewhere today,
+//  2) allow a game that is used once elsewhere (so at most 2 uses a day),
+//  3) only then allow sharing. `used` carries game usage across all odds levels of the day.
+export function pickDiverse(order, want = 5, used = new Map()) {
+  const chosen = []
+  const fresh = (c, maxUsed) => c.legs.every((l) => (used.get(l.fixtureId) || 0) <= maxUsed)
+  for (const [maxShared, maxUsed] of [[0, 0], [0, 1], [1, 1], [2, 1], [99, 99]]) {
+    for (const c of order) {
+      if (chosen.length >= want) break
+      if (!chosen.includes(c) && chosen.every((o) => sharedGames(o, c) <= maxShared) && fresh(c, maxUsed)) chosen.push(c)
+    }
+    if (chosen.length >= want) break
+  }
+  for (const c of chosen) for (const l of c.legs) used.set(l.fixtureId, (used.get(l.fixtureId) || 0) + 1)
   return chosen
+}
+
+// Builds a level's candidates while respecting the day-wide cap: first from games not used yet today,
+// then from games used once, and only as a last resort from any game.
+export function buildWithCap(items, target, seed, used) {
+  let best = []
+  for (const maxUsed of [0, 1, 99]) {
+    const pool = items.filter((i) => (used.get(i.fixtureId) || 0) <= maxUsed)
+    const list = buildSafest(pool, target, seed)
+    if (list.length >= 5) return list
+    if (list.length > best.length) best = list
+  }
+  return best
 }

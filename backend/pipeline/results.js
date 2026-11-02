@@ -10,11 +10,25 @@ const WINS = {
   o15: (h, a) => h + a >= 2, o25: (h, a) => h + a >= 3, u35: (h, a) => h + a <= 3, btts: (h, a) => h > 0 && a > 0,
 }
 
+// The free plan cannot read old dates by date, but it can read specific fixtures by id (20 per request).
+async function fetchFixtures(date, set) {
+  try {
+    return (await football.rawCall('/fixtures', { date, timezone: 'Africa/Lagos' })).response
+  } catch (e) {
+    if (!/access to this date/i.test(e.message) || !set) throw e
+    const ids = [...new Set(set.categories.flatMap((c) => (c.picks || []).flatMap((p) => p.games.map((g) => g.fixtureId))))]
+    const out = []
+    for (let i = 0; i < ids.length; i += 20) out.push(...(await football.rawCall('/fixtures', { ids: ids.slice(i, i + 20).join('-') })).response)
+    return out
+  }
+}
+
 // Checks every saved pick of a day against the real final scores (90 minutes, as bookmakers settle).
 // Always asks the API fresh (not from cache). Returns that day's fixtures so callers can reuse them.
-export async function settleDay(date) {
-  const all = (await football.rawCall('/fixtures', { date, timezone: 'Africa/Lagos' })).response
+export async function settleDay(date, { onlyIfPending = false } = {}) {
   const set = await PredictionSet.findOne({ date })
+  if (onlyIfPending && !set?.categories?.some((c) => (c.picks || []).some((p) => !p.result || p.result === 'pending'))) return null
+  const all = await fetchFixtures(date, set)
   if (!set) { console.log(`  settle ${date}: no saved predictions for that day`); return all }
 
   const byId = new Map(all.map((f) => [f.fixture.id, f]))

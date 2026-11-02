@@ -5,7 +5,7 @@ import { useAuth } from '../AuthContext'
 import Disclaimer from './Disclaimer'
 
 export function dayTabs() {
-  return [-1, 0, 1, 2].map((offset) => {
+  return [-2, -1, 0, 1].map((offset) => {
     const d = new Date()
     d.setDate(d.getDate() + offset)
     const label = offset === -1 ? 'Yesterday' : offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString('en-NG', { weekday: 'long' })
@@ -21,7 +21,7 @@ function Pick({ n, pick, open, onToggle }) {
       <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center justify-between gap-4 p-4 text-left sm:px-6">
         <div>
           <p className="font-display text-lg font-bold">Pick {n}</p>
-          <p className="text-sm text-paper/60">Starts {clock(pick.start)} · {pick.games.length} {pick.games.length === 1 ? 'game' : 'games'}</p>
+          <p className="text-sm text-paper/60">Starts {clock(pick.start)} · {pick.games.length} {pick.games.length === 1 ? 'game' : 'games'}{pick.chance != null && <> · est. {pick.chance}% chance all win</>}</p>
         </div>
         <div className="flex items-center gap-2">
           {pick.result && pick.result !== 'pending' && (
@@ -65,7 +65,7 @@ function Pick({ n, pick, open, onToggle }) {
 export default function PredictionsView({ preview = false }) {
   const { user } = useAuth()
   const tabs = dayTabs()
-  const [day, setDay] = useState(1)
+  const [day, setDay] = useState(2) // tabs: day before yesterday, yesterday, today, tomorrow
   const [cat, setCat] = useState(2)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -75,7 +75,7 @@ export default function PredictionsView({ preview = false }) {
   useEffect(() => {
     let live = true
     setLoading(true); setError(''); setOpenId(null)
-    api(`/api/predictions?day=${day - 1}`)
+    api(`/api/predictions?day=${day - 2}`)
       .then((d) => live && setData(d))
       .catch((e) => live && setError(e.message))
       .finally(() => live && setLoading(false))
@@ -125,7 +125,7 @@ export default function PredictionsView({ preview = false }) {
         ))}
       </div>
 
-      {day === 0 && <p className="mt-5 text-sm text-paper/70">Yesterday’s picks, checked against the final scores (90 minutes, as bookmakers settle).</p>}
+      {day < 2 && <p className="mt-5 text-sm text-paper/70">Past picks, checked against the final scores (90 minutes, as bookmakers settle). Every result is shown, wins and losses.</p>}
       {(
         <>
           {data && (
@@ -133,7 +133,7 @@ export default function PredictionsView({ preview = false }) {
               {data.categories.map((c) => (
                 <button key={c.odds} role="tab" aria-selected={cat === c.odds} onClick={() => { setCat(c.odds); setOpenId(null) }}
                   className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-semibold ${cat === c.odds ? 'border-brand bg-brand/15 text-brand' : 'border-line text-paper/70 hover:border-brand'}`}>
-                  {c.odds} odds{c.locked && <span className="ml-1.5 text-xs font-normal text-paper/50">Pro</span>}{day === 0 && c.record && c.record.won + c.record.lost > 0 && <span className="ml-1.5 text-xs font-normal text-paper/60">{c.record.won}/{c.record.won + c.record.lost} won</span>}
+                  {c.odds} odds{c.locked && <span className="ml-1.5 text-xs font-normal text-paper/50">Pro</span>}{day < 2 && c.record && c.record.won + c.record.lost > 0 && <span className="ml-1.5 text-xs font-normal text-paper/60">{c.record.won}/{c.record.won + c.record.lost} won</span>}
                 </button>
               ))}
             </div>

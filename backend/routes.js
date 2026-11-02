@@ -23,13 +23,17 @@ const handle = (fn) => (req, res) =>
     res.status(500).json({ error: 'Server error. Please try again.' })
   })
 
+// Emails in ADMIN_EMAILS (comma separated, in the backend .env) always get everything a Pro member gets.
+const isAdmin = (u) => (process.env.ADMIN_EMAILS || '').toLowerCase().split(',').map((x) => x.trim()).filter(Boolean).includes(u.email)
+const planOf = (u) => (isAdmin(u) ? 'pro' : u.plan)
+
 function usage(u) {
-  if (u.plan === 'pro') return { unlimited: true }
+  if (planOf(u) === 'pro') return { unlimited: true }
   const live = u.windowStart && Date.now() - u.windowStart.getTime() < WINDOW_MS
   const used = live ? u.used : 0
   return { limit: FREE_LIMIT, left: FREE_LIMIT - used, resetsAt: live ? new Date(u.windowStart.getTime() + WINDOW_MS) : null }
 }
-const view = (u) => ({ id: u._id, username: u.username, email: u.email, plan: u.plan, ...usage(u) })
+const view = (u) => ({ id: u._id, username: u.username, email: u.email, plan: planOf(u), ...usage(u) })
 const start = (res, u) => {
   res.cookie('token', jwt.sign({ id: u._id }, process.env.JWT_SECRET, { expiresIn: '7d' }), cookieOpts)
   res.json({ user: view(u) })
@@ -92,10 +96,10 @@ router.post('/password', auth, handle(async (req, res) => {
 // Real predictions saved by the daily generator. Locked categories are decided HERE:
 // free users never receive the games of a locked category.
 router.get('/predictions', optionalAuth, handle(async (req, res) => {
-  const day = Math.max(-1, Math.min(2, Number(req.query.day) || 0))
+  const day = Math.max(-2, Math.min(2, Number(req.query.day) || 0))
   const date = addDays(lagosToday(), day)
   const set = await PredictionSet.findOne({ date }).lean()
-  const pro = req.user?.plan === 'pro'
+  const pro = !!req.user && planOf(req.user) === 'pro'
   const categories = CATEGORIES.map((odds) => {
     const picks = set?.categories?.find((c) => c.odds === odds)?.picks || []
     const record = { won: picks.filter((p) => p.result === 'won').length, lost: picks.filter((p) => p.result === 'lost').length, pending: picks.filter((p) => !p.result || p.result === 'pending').length, total: picks.length }
@@ -130,7 +134,7 @@ router.post('/convert', auth, handle(async (req, res) => {
   if (!from || !to || !code.trim()) return res.status(400).json({ error: 'Choose both bookies and enter a booking code.' })
   if (from === to) return res.status(400).json({ error: 'Choose two different bookies.' })
   const u = req.user
-  if (u.plan !== 'pro') {
+  if (planOf(u) !== 'pro') {
     const s = usage(u)
     if (s.left <= 0)
       return res.status(429).json({ error: 'You have used your 3 free conversions. Subscribe for unlimited conversions, or come back when your limit resets.', usage: s })

@@ -9,7 +9,8 @@
     "check-keys": "node scripts/checkKeys.js",
     "sample": "node scripts/sample.js",
     "generate": "node scripts/generate.js",
-    "settle": "node scripts/settle.js"
+    "settle": "node scripts/settle.js",
+    "calibration": "node scripts/calibration.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -55,3 +55,13 @@ Settings live in `backend/.env` (see `.env.example`). Leagues are listed in `bac
     npm run settle -- 2026-10-31   # a specific day
 
 `npm run generate` also settles yesterday first. The Yesterday tab on the site then shows Won / Lost on each pick and the final score of each game.
+
+## Checking how good the predictions really are
+
+    npm run calibration   # compares our predicted percentages with real results, by odds level, confidence and market
+
+Needs a few weeks of settled days before the numbers mean much.
+
+## Owner access
+
+Put your email in `ADMIN_EMAILS` (backend `.env` and Render) to see every odds level, including Pro ones.

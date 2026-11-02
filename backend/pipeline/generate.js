@@ -4,7 +4,7 @@ import PredictionSet from '../PredictionSet.js'
 import { CATEGORIES, LEAGUES } from './leagues.js'
 import { loadOdds, findOdds } from './data.js'
 import { buildFacts, legsFor, templateWhy, SELECTIONS } from './facts.js'
-import { buildTiered, pickDiverse } from './slips.js'
+import { buildWithCap, pickDiverse } from './slips.js'
 import { settleDay } from './results.js'
 import { loadInjuries, previousLineups, adjustForAbsences } from './news.js'
 
@@ -149,7 +149,12 @@ async function generateDay(date, oddsFixtures, slugs, playedOn) {
   console.log(`  ${items.length} fixtures have usable selections (API-Football requests used this run: ${football.budget.used})`)
 
   const slipInput = items.map((i) => ({ fixtureId: i.fixtureId, legs: i.legs, tier: i.tier }))
-  const candidates = Object.fromEntries(CATEGORIES.map((c) => [c, buildTiered(slipInput, c, seedFor(date, c))]))
+  const candidates = {}
+  const reserved = new Map() // games our own top picks of earlier levels would use, so later levels look elsewhere
+  for (const c of CATEGORIES) {
+    candidates[c] = buildWithCap(slipInput, c, seedFor(date, c), reserved)
+    pickDiverse(candidates[c], 5, reserved)
+  }
   console.log('  candidate slips:', CATEGORIES.map((c) => `${c} odds: ${candidates[c].length}`).join(', '))
 
   let ai = null
@@ -159,11 +164,12 @@ async function generateDay(date, oddsFixtures, slugs, playedOn) {
   const reasons = new Map((Array.isArray(ai?.reasons) ? ai.reasons : []).map((r) => [`${r.fixtureId}|${r.selection}`, r.why]))
   const byFixture = new Map(items.map((i) => [i.fixtureId, i]))
 
+  const used = new Map() // how many picks today already use each game, across all odds levels
   const categories = CATEGORIES.map((c) => {
     const byId = new Map(candidates[c].map((x) => [x.id, x]))
     const aiIds = (Array.isArray(ai?.choices?.[c]) ? ai.choices[c] : []).filter((id, i, a) => byId.has(id) && a.indexOf(id) === i)
     const order = [...aiIds, ...candidates[c].map((x) => x.id).filter((id) => !aiIds.includes(id))].map((id) => byId.get(id))
-    const picks = pickDiverse(order, 5).map((cand, n) => {
+    const picks = pickDiverse(order, 5, used).map((cand, n) => {
       const games = cand.legs.map((leg) => {
         const it = byFixture.get(leg.fixtureId)
         const [market, pick] = SELECTIONS[leg.key]
@@ -177,7 +183,7 @@ async function generateDay(date, oddsFixtures, slugs, playedOn) {
           why: grounded(ai_why, it.facts) ? ai_why : templateWhy(leg, it.facts),
         }
       }).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))
-      return { id: `${date}-${c}-${n + 1}`, odds: cand.odds, start: games[0].kickoff, games }
+      return { id: `${date}-${c}-${n + 1}`, odds: cand.odds, chance: Math.min(95, Math.round(cand.p * 100)), start: games[0].kickoff, games }
     })
     return { odds: c, picks }
   })
@@ -211,6 +217,7 @@ export async function generateForDays(offsets = [0, 1, 2]) {
     const yesterday = await settleDay(y)
     playedOn.set(y, new Set(yesterday.flatMap((f) => [f.teams.home.id, f.teams.away.id])))
   } catch (e) { console.log(`  could not check yesterday's results: ${e.message}`) }
+  try { await settleDay(addDays(lagosToday(), -2), { onlyIfPending: true }) } catch (e) { console.log(`  could not re-check the day before yesterday: ${e.message}`) }
 
   const oddsFixtures = await loadOdds(slugs)
   console.log(`OddsPapi: ${oddsFixtures.length} upcoming fixtures with prices from ${slugLabel}`)
