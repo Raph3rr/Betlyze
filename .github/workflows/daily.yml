@@ -39,7 +39,7 @@ jobs:
           ODDSPAPI_KEY: ${{ secrets.ODDSPAPI_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-3.5-flash
-          ODDS_BOOKMAKERS: 1xbet,bet365,pinnacle
+          ODDS_BOOKMAKERS: 1xbet
           MAX_FIXTURES_PER_DAY: '40'
           API_FOOTBALL_BUDGET: '90'
           API_FOOTBALL_MIN_INTERVAL_MS: '6500'
