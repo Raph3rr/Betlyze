@@ -8,7 +8,7 @@ import { buildWithCap, pickDiverse } from './slips.js'
 import { settleDay } from './results.js'
 import { loadInjuries, previousLineups, adjustForAbsences } from './news.js'
 
-const BOOKMAKER_NAMES = { '1xbet': '1xBet', sportybet: 'SportyBet', msport: 'MSport', bet365: 'bet365', betway: 'Betway', pinnacle: 'Pinnacle' }
+const BOOKMAKER_NAMES = { '1xbet': '1xBet' }
 const MAX_FIXTURES = Number(process.env.MAX_FIXTURES_PER_DAY) || 40
 
 export const lagosToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
