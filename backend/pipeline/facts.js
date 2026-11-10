@@ -7,11 +7,21 @@ export const SELECTIONS = {
   o25: ['Goals', 'Over 2.5 goals'],
   u35: ['Goals', 'Under 3.5 goals'],
   btts: ['Both teams to score', 'Yes'],
+  bttsNo: ['Both teams to score', 'No'],
+  u25: ['Goals', 'Under 2.5 goals'],
+  u45: ['Goals', 'Under 4.5 goals'],
+  o35: ['Goals', 'Over 3.5 goals'],
+  dc12: ['Double chance', 'Home or away'],
 }
-const GOALS_KEYS = ['o15', 'o25', 'u35', 'btts']
+export const GOALS_KEYS = ['o15', 'o25', 'u35', 'btts', 'bttsNo', 'u25', 'u45', 'o35']
 
 // Which legs are allowed into a slip. Tune these to be stricter or looser.
-const MIN_ODDS = 1.15, MAX_ODDS = 2.5, MIN_PROB = 0.5, MIN_VALUE = 0.92 // value = probability x odds
+// value = probability x odds. Level 0 is strict. Levels 1 and 2 are only used when a day has too few usable games.
+export const LEVELS = [
+  { minOdds: 1.15, maxOdds: 2.5, minProb: 0.5, minValue: 0.92, goals: 1.0 },
+  { minOdds: 1.1, maxOdds: 3.0, minProb: 0.45, minValue: 0.85, goals: 0.85 },
+  { minOdds: 1.08, maxOdds: 3.5, minProb: 0.4, minValue: 0.8, goals: 0 },
+]
 
 const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null }
 const frac = (v) => { const n = num(String(v ?? '').replace('%', '')); return n == null ? null : n / 100 }
@@ -74,12 +84,13 @@ export function buildFacts(pred, fx, recent = {}, news = {}) {
   const la = lamA == null ? null : Math.min(Math.max(lamA, 0.3), 3.5)
   const probs = {}
   if (pHome != null && pDraw != null && pAway != null) {
-    probs.home = pHome; probs.away = pAway; probs.dc1x = pHome + pDraw; probs.dcx2 = pAway + pDraw
+    probs.home = pHome; probs.away = pAway; probs.dc1x = pHome + pDraw; probs.dcx2 = pAway + pDraw; probs.dc12 = pHome + pAway
   }
   if (lh != null && la != null) {
     const lam = lh + la
     probs.o15 = 1 - poissonCdf(1, lam); probs.o25 = 1 - poissonCdf(2, lam); probs.u35 = poissonCdf(3, lam)
-    probs.btts = (1 - Math.exp(-lh)) * (1 - Math.exp(-la))
+    probs.btts = (1 - Math.exp(-lh)) * (1 - Math.exp(-la)); probs.bttsNo = 1 - probs.btts
+    probs.u25 = poissonCdf(2, lam); probs.u45 = poissonCdf(4, lam); probs.o35 = 1 - poissonCdf(3, lam)
   }
 
   const split = (side_, venue) => {
@@ -125,23 +136,34 @@ export function buildFacts(pred, fx, recent = {}, news = {}) {
   return { facts, probs }
 }
 
-// Goals picks must be backed by goals evidence, not just a good probability.
-function goalsSupported(key, facts) {
+// Goals picks must be backed by goals evidence, not just a good probability. `k` loosens the bar at looser levels (0 = no bar).
+function goalsSupported(key, facts, k) {
   const g = facts.goalsEvidence.ourExpectedGoals
   if (g.total == null) return false
-  if (key === 'o15') return g.total >= 2.0
-  if (key === 'o25') return g.total >= 2.7
-  if (key === 'u35') return g.total <= 2.8
-  if (key === 'btts') return g.home >= 1.1 && g.away >= 1.1
+  if (k === 0) return true
+  if (key === 'o15') return g.total >= 2.0 * k
+  if (key === 'o25') return g.total >= 2.7 * k
+  if (key === 'o35') return g.total >= 3.3 * k
+  if (key === 'u25') return g.total <= 2.4 / k
+  if (key === 'u35') return g.total <= 2.8 / k
+  if (key === 'u45') return g.total <= 3.4 / k
+  if (key === 'btts') return g.home >= 1.1 * k && g.away >= 1.1 * k
+  if (key === 'bttsNo') return Math.min(g.home, g.away) <= 0.9 / k
   return true
 }
 
-export function legsFor(probs, prices, facts, sources = {}) {
+// Which selections of a game may enter slips at a given strictness level. `rejects` (optional) counts why selections were dropped.
+export function legsFor(probs, prices, facts, sources = {}, level = 0, rejects = null) {
+  const L = LEVELS[level]
   const legs = []
+  const no = (why) => { if (rejects) rejects[why] = (rejects[why] || 0) + 1 }
   for (const [key, p] of Object.entries(probs)) {
     const odds = prices[key]
-    if (!odds || odds < MIN_ODDS || odds > MAX_ODDS || p < MIN_PROB || p * odds < MIN_VALUE) continue
-    if (GOALS_KEYS.includes(key) && !goalsSupported(key, facts)) continue
+    if (!odds) { no('no bookmaker price'); continue }
+    if (odds < L.minOdds || odds > L.maxOdds) { no('odds out of range'); continue }
+    if (p < L.minProb) { no('chance too low'); continue }
+    if (p * odds < L.minValue) { no('value too low'); continue }
+    if (GOALS_KEYS.includes(key) && !goalsSupported(key, facts, L.goals)) { no('goals evidence too weak'); continue }
     legs.push({ key, odds, p, source: sources[key] })
   }
   return legs
@@ -158,7 +180,7 @@ export function templateWhy(leg, facts) {
       bits.push(`${home} scored 2 or more goals in ${gb.home.gamesScoring2OrMore} of their last ${gb.home.games} games and conceded ${gb.home.goalsConceded} in total, while ${away} scored 2 or more in ${gb.away.gamesScoring2OrMore} of their last ${gb.away.games} and conceded ${gb.away.goalsConceded} in total.`)
     else if (g.goalsScoredInLast5Games.home != null && g.goalsScoredInLast5Games.away != null)
       bits.push(`In their last 5 games ${home} scored ${g.goalsScoredInLast5Games.home} and conceded ${g.goalsConcededInLast5Games.home}, while ${away} scored ${g.goalsScoredInLast5Games.away} and conceded ${g.goalsConcededInLast5Games.away}.`)
-    if (leg.key === 'btts' && g.gamesWithoutScoringThisSeason.home != null)
+    if ((leg.key === 'btts' || leg.key === 'bttsNo') && g.gamesWithoutScoringThisSeason.home != null)
       bits.push(`${home} have failed to score in ${g.gamesWithoutScoringThisSeason.home} of ${g.gamesWithoutScoringThisSeason.outOfHome} league games and ${away} in ${g.gamesWithoutScoringThisSeason.away} of ${g.gamesWithoutScoringThisSeason.outOfAway}.`)
     if (g.headToHeadGoals.meetings)
       bits.push(`Their last ${g.headToHeadGoals.meetings} meetings averaged ${g.headToHeadGoals.averageGoalsPerMeeting} goals, with ${g.headToHeadGoals.meetingsWith3OrMoreGoals} having 3 or more.`)

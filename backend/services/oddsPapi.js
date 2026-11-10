@@ -23,7 +23,6 @@ export async function rawCall(path, params = {}, opts = {}) {
 const call = (path, params, ttl) => cached(`oddspapi:${path}:${JSON.stringify(params)}`, ttl, () => rawCall(path, params))
 
 export const getTournaments = () => call('/v4/tournaments', { sportId: SOCCER_SPORT_ID }, 24 * HOUR)
-export const getOddsByTournaments = (tournamentIds, bookmaker) => call('/v4/odds-by-tournaments', { bookmakers: bookmaker, tournamentIds: tournamentIds.join(',') }, 3 * HOUR)
 export const getOdds = (fixtureId) => call('/v4/odds', { fixtureId }, 3 * HOUR)
 export const getMarkets = () => call('/v4/markets', {}, 7 * 24 * HOUR)
 // The full team list is ~18 MB: too big for MongoDB (16 MB limit), so it is saved as a file for 7 days instead.
@@ -42,4 +41,4 @@ export async function getParticipants() {
 export const getBookmakers = () => call('/v4/bookmakers', {}, 7 * 24 * HOUR)
 
 // Caches an already-trimmed result (the raw odds are too big to store).
-export const cachedReduced = (key, fn) => cached(`oddspapi:${key}`, 3 * HOUR, fn)
+export const cachedReduced = (key, fn, shouldStore) => cached(`oddspapi:${key}`, 3 * HOUR, fn, shouldStore)

@@ -68,8 +68,13 @@ Put your email in `ADMIN_EMAILS` (backend `.env` and Render) to see every odds l
 
 ## Automatic daily run (GitHub Actions)
 
-`.github/workflows/daily.yml` runs every morning at 06:00 Lagos time. It checks yesterday's results, then creates
+`.github/workflows/daily.yml` runs three times every morning (05:17, 07:47 and 10:27 Lagos time; extra runs are harmless). It checks yesterday's results, then creates
 today's and tomorrow's picks if they do not exist yet. A day's picks are never replaced once created.
 You can also start it by hand: GitHub, Actions tab, "Daily predictions", Run workflow.
 
 Secrets needed in GitHub (Settings, Secrets and variables, Actions): MONGODB_URI, API_FOOTBALL_KEY, ODDSPAPI_KEY, GEMINI_API_KEY.
+
+## Login on Vercel (important)
+
+`frontend/vercel.json` passes `/api` to your Render backend. Replace `YOUR-BACKEND-NAME.onrender.com` with your real Render address,
+and delete (or empty) `VITE_API_URL` in the Vercel project settings, then redeploy. This keeps you logged in after a refresh.

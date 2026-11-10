@@ -1,11 +1,15 @@
 name: Daily predictions
 
-# Runs every morning at 06:00 Lagos time (05:00 UTC):
+# Runs three times every morning (Lagos time 05:17, 07:47 and 10:27). GitHub often delays or drops scheduled runs,
+# so extra triggers make sure one of them lands. Running again is harmless: days that already have picks are locked,
+# and results are only re-checked when something is still pending.
 # 1) checks yesterday's picks against the real final scores
 # 2) creates today's and tomorrow's picks if they do not exist yet (existing days are never replaced)
 on:
   schedule:
-    - cron: '0 5 * * *'
+    - cron: '17 4 * * *'
+    - cron: '47 6 * * *'
+    - cron: '27 9 * * *'
   workflow_dispatch:
     inputs:
       force:
@@ -20,7 +24,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: backend
@@ -39,8 +43,9 @@ jobs:
           ODDSPAPI_KEY: ${{ secrets.ODDSPAPI_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-3.5-flash
-          ODDS_BOOKMAKERS: 1xbet
-          MAX_FIXTURES_PER_DAY: '40'
+          GEMINI_FALLBACK_MODEL: gemini-2.5-flash
+          ODDS_BOOKMAKERS: 1xbet,bet365,pinnacle
+          MAX_FIXTURES_PER_DAY: '60'
           API_FOOTBALL_BUDGET: '90'
           API_FOOTBALL_MIN_INTERVAL_MS: '6500'
           KICKOFF_WINDOW: '06:00-22:30'

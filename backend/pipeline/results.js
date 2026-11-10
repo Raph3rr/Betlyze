@@ -8,6 +8,7 @@ const KEY_BY_LABEL = Object.fromEntries(Object.entries(SELECTIONS).map(([k, [m, 
 const WINS = {
   home: (h, a) => h > a, away: (h, a) => a > h, dc1x: (h, a) => h >= a, dcx2: (h, a) => a >= h,
   o15: (h, a) => h + a >= 2, o25: (h, a) => h + a >= 3, u35: (h, a) => h + a <= 3, btts: (h, a) => h > 0 && a > 0,
+  bttsNo: (h, a) => !(h > 0 && a > 0), u25: (h, a) => h + a <= 2, u45: (h, a) => h + a <= 4, o35: (h, a) => h + a >= 4, dc12: (h, a) => h !== a,
 }
 
 // The free plan cannot read old dates by date, but it can read specific fixtures by id (20 per request).

@@ -8,14 +8,17 @@ const schema = new mongoose.Schema({
 })
 const Cache = mongoose.models.Cache || mongoose.model('Cache', schema)
 
-export async function cached(key, ttlSeconds, fetcher) {
+// shouldStore lets a caller refuse to save (or reuse) a bad result, for example an empty odds list.
+export async function cached(key, ttlSeconds, fetcher, shouldStore = () => true) {
   const hit = await Cache.findOne({ key }).lean()
-  if (hit) return hit.data
+  if (hit && shouldStore(hit.data)) return hit.data
   const data = await fetcher()
-  try {
-    await Cache.updateOne({ key }, { data, expiresAt: new Date(Date.now() + ttlSeconds * 1000) }, { upsert: true })
-  } catch (e) {
-    console.log('  (could not cache a response:', e.message + ')')
+  if (shouldStore(data)) {
+    try {
+      await Cache.updateOne({ key }, { data, expiresAt: new Date(Date.now() + ttlSeconds * 1000) }, { upsert: true })
+    } catch (e) {
+      console.log('  (could not cache a response:', e.message + ')')
+    }
   }
   return data
 }

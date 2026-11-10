@@ -39,10 +39,9 @@ function parseLoose(text) {
   return v
 }
 
-// Sends a prompt and returns the parsed JSON answer. Retries on rate limits and server errors.
-export async function generateJson(prompt, { retries = 2, maxOutputTokens = 8192 } = {}) {
+async function callModel(model, prompt, { retries, maxOutputTokens }) {
   for (let attempt = 0; ; attempt++) {
-    const res = await fetchRetry(`${BASE}/models/${MODEL()}:generateContent`, {
+    const res = await fetchRetry(`${BASE}/models/${model}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey() },
       body: JSON.stringify({
@@ -58,10 +57,22 @@ export async function generateJson(prompt, { retries = 2, maxOutputTokens = 8192
       return parseLoose(text)
     }
     if ((res.status === 429 || res.status >= 500) && attempt < retries) {
-      await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt))
+      await new Promise((r) => setTimeout(r, 3000 * 2 ** attempt)) // 3s, 6s, 12s, 24s
       continue
     }
     throw new Error(`Gemini responded ${res.status}`)
+  }
+}
+
+// Sends a prompt and returns the parsed JSON answer. Retries when Google is busy, then tries a backup model.
+export async function generateJson(prompt, { retries = 4, maxOutputTokens = 8192 } = {}) {
+  try {
+    return await callModel(MODEL(), prompt, { retries, maxOutputTokens })
+  } catch (e) {
+    const backup = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash'
+    if (!backup || backup === MODEL() || !/responded (429|5\d\d)|Could not reach/.test(e.message)) throw e
+    console.log(`  Gemini (${MODEL()}) failed: ${e.message}. Trying backup model ${backup}...`)
+    return await callModel(backup, prompt, { retries: 2, maxOutputTokens })
   }
 }
 
