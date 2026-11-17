@@ -35,7 +35,7 @@ It checks API-Football account status, BSD access, The Odds API soccer competiti
 ## Real predictions (backend)
 
     npm run generate     # builds today, tomorrow and the day after, and saves them in MongoDB
-    npm run generate:dry # bypasses existing-pick locks and shows what would be generated without replacing prediction documents
+    npm run generate:dry # previews without writing picks or calling Gemini; still queries fixture and odds providers
 
 The server also has a protected endpoint for a daily scheduler:
 

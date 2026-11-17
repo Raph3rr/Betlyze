@@ -230,7 +230,9 @@ async function generateDay(date, slugs, playedOn, maxFixtures) {
   }
 
   let ai = null
-  if (Object.values(candidates).some((l) => l.length) && process.env.GEMINI_API_KEY) {
+  if (DRY_RUN) {
+    console.log('  DRY RUN: Gemini skipped; candidate order and wording use the local fallback.')
+  } else if (Object.values(candidates).some((l) => l.length) && process.env.GEMINI_API_KEY) {
     try { ai = await generateJson(buildPrompt(items, candidates), { maxOutputTokens: 20000 }) } catch (e) { console.log('  Gemini failed, using our own ranking and wording:', e.message) }
   }
   const reasons = new Map((Array.isArray(ai?.reasons) ? ai.reasons : []).map((r) => [`${r.fixtureId}|${r.selection}`, r.why]))
@@ -242,10 +244,11 @@ async function generateDay(date, slugs, playedOn, maxFixtures) {
     const aiIds = (Array.isArray(ai?.choices?.[c]) ? ai.choices[c] : []).filter((id, i, a) => byId.has(id) && a.indexOf(id) === i)
     orders[c] = [...aiIds, ...candidates[c].map((x) => x.id).filter((id) => !aiIds.includes(id))].map((id) => byId.get(id))
   }
-  const configuredCap = Math.max(1, Number(process.env.MAX_FIXTURE_TICKET_APPEARANCES) || 4)
+  const configuredCap = Math.min(4, Math.max(1, Number(process.env.MAX_FIXTURE_TICKET_APPEARANCES) || 4))
   const appearanceCap = configuredCap
-  const { selected: selectedByLevel } = pickBalanced(orders, CATEGORIES, 5, appearanceCap)
-  console.log(`  balanced ticket selection: cap ${appearanceCap} appearances per fixture across all odds levels; reuses fixtures only when needed`)
+  const { selected: selectedByLevel, fixtureCounts } = pickBalanced(orders, CATEGORIES, 5, appearanceCap)
+  const maxActualAppearances = Math.max(0, ...fixtureCounts.values())
+  console.log(`  balanced ticket selection: cap ${appearanceCap} appearances per fixture across all odds levels; reuses fixtures only when needed (max used ${maxActualAppearances})`)
   const categories = CATEGORIES.map((c) => {
     const picks = selectedByLevel[c].map((cand, n) => {
       const games = cand.legs.map((leg) => {

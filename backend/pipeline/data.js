@@ -144,13 +144,17 @@ export async function loadOdds(fixtures, date) {
       for (const f of upcoming) {
         const league = LEAGUES.find((l) => l.id === f.league.id)
         if (!league?.oddsApi) continue
-        const stat = keyStats.get(league.oddsApi) || { key: league.oddsApi, tier: league.tier, fixtures: 0, rank: LEAGUES.indexOf(league) }
+        const stat = keyStats.get(league.oddsApi) || { key: league.oddsApi, tier: league.tier, fixtures: 0, uncovered: 0, rank: LEAGUES.indexOf(league) }
         stat.tier = Math.min(stat.tier, league.tier)
         stat.fixtures++
+        // Spend the limited per-run Odds API slots on competitions that can add the most
+        // currently uncovered games. Keep competition tier as a tie-breaker.
+        const current = findOdds(f, merged)
+        if (!current?.prices || !Object.keys(current.prices).length) stat.uncovered++
         keyStats.set(league.oddsApi, stat)
       }
       const prioritized = [...keyStats.values()].filter((x) => active.has(x.key))
-        .sort((a, b) => a.tier - b.tier || b.fixtures - a.fixtures || a.rank - b.rank)
+        .sort((a, b) => b.uncovered - a.uncovered || b.fixtures - a.fixtures || a.tier - b.tier || a.rank - b.rank)
       const cachedKeys = prioritized.filter((x) => oddsApiRunData.has(x.key))
       const newKeySlots = Math.max(0, cap - oddsApiRunData.size)
       const newKeys = prioritized.filter((x) => !oddsApiRunData.has(x.key)).slice(0, newKeySlots)

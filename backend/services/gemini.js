@@ -56,16 +56,20 @@ async function callModel(model, prompt, { retries, maxOutputTokens }) {
       if (!text) throw new Error('Gemini returned no text')
       return parseLoose(text)
     }
-    if ((res.status === 429 || res.status >= 500) && attempt < retries) {
+    const payload = await res.json().catch(() => null)
+    const apiError = payload?.error
+    const errorDetails = Array.isArray(apiError?.details) ? apiError.details : []
+    const detailsText = JSON.stringify(errorDetails)
+    const dailyQuotaExceeded = /RequestsPerDay|TokensPerDay|per day limit exceeded/i.test(detailsText)
+    if (dailyQuotaExceeded) console.log(`  Gemini daily quota exhausted for ${model}; skipping retries and trying fallback.`)
+    if ((res.status === 429 || res.status >= 500) && attempt < retries && !dailyQuotaExceeded) {
       await new Promise((r) => setTimeout(r, 3000 * 2 ** attempt)) // 3s, 6s, 12s, 24s
       continue
     }
-    const payload = await res.json().catch(() => null)
-    const apiError = payload?.error
     const status = apiError?.status ? ` ${apiError.status}` : ''
     const message = apiError?.message ? `: ${apiError.message}` : ''
-    const details = Array.isArray(apiError?.details) && apiError.details.length
-      ? ` (${JSON.stringify(apiError.details).slice(0, 700)})`
+    const details = errorDetails.length
+      ? ` (${detailsText.slice(0, 700)})`
       : ''
     throw new Error(`Gemini model ${model} responded ${res.status}${status}${message}${details}`)
   }
