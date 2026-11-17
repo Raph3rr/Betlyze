@@ -94,8 +94,8 @@ export function pickDiverse(order, want = 5, used = new Map(), { commit = true }
   return chosen
 }
 
-// Allocate every odds level together in round-robin order. A fixture may be used once per
-// level and is subject to a firm day-wide cap; scarce slates therefore return fewer tickets.
+// Allocate every odds level together in round-robin order. Prefer fresh fixtures within each
+// level, then allow reuse under a firm day-wide cap when the slate is scarce.
 export function pickBalanced(orders, categories, want = 5, maxAppearances = 4) {
   const selected = Object.fromEntries(categories.map((c) => [c, []]))
   const fixtureCounts = new Map()
@@ -105,10 +105,13 @@ export function pickBalanced(orders, categories, want = 5, maxAppearances = 4) {
     progress = false
     for (const category of categories) {
       if (selected[category].length >= want) continue
-      const candidate = (orders[category] || []).find((slip) => {
+      const fits = (slip, allowLevelReuse) => {
         const ids = [...new Set(slip.legs.map((leg) => leg.fixtureId))]
-        return ids.every((id) => !fixtureByLevel.get(category).has(id) && (fixtureCounts.get(id) || 0) < maxAppearances)
-      })
+        return !selected[category].some((picked) => picked.id === slip.id)
+          && ids.every((id) => (allowLevelReuse || !fixtureByLevel.get(category).has(id)) && (fixtureCounts.get(id) || 0) < maxAppearances)
+      }
+      const order = orders[category] || []
+      const candidate = order.find((slip) => fits(slip, false)) || order.find((slip) => fits(slip, true))
       if (!candidate) continue
       selected[category].push(candidate)
       progress = true

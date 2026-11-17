@@ -91,6 +91,10 @@ const lagosMinutes = (f) => {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(f.fixture.timestamp * 1000))
   return Number(parts.find((p) => p.type === 'hour').value) * 60 + Number(parts.find((p) => p.type === 'minute').value)
 }
+const lagosClock = (f) => {
+  const minutes = lagosMinutes(f)
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+}
 export const inWindow = (f) => { const m = lagosMinutes(f); return m >= toMinutes(WINDOW[0]) && m <= toMinutes(WINDOW[1]) }
 
 export const bucketOf = (f) => {
@@ -156,7 +160,8 @@ async function generateDay(date, slugs, playedOn, maxFixtures) {
     const combined = d.combinedMissing.map(([k, n]) => `${marketNames[k]} ${n}`).join(', ') || 'none'
     console.log(`  odds coverage ${d.league}: ${providerLine('BSD')}; ${providerLine('The Odds API')}; combined missing: ${combined}`)
   }
-  if (notStarted.length > upcoming.length) console.log(`  ${notStarted.length - upcoming.length} games skipped: kickoff outside ${WINDOW.join(' to ')} (Lagos time)`)
+  const outsideWindow = notStarted.filter((f) => !inWindow(f))
+  if (outsideWindow.length) console.log(`  ${outsideWindow.length} games skipped: kickoff outside ${WINDOW.join(' to ')} (Lagos time): ${outsideWindow.map((f) => `${f.league.name}: ${f.teams.home.name} vs ${f.teams.away.name} at ${lagosClock(f)}`).join('; ')}`)
   const matched = upcoming.map((f) => ({ f, tier: league.get(f.league.id).tier, odds: findOdds(f, oddsFixtures) }))
   const noOdds = matched.filter((x) => !x.odds && x.tier <= 2)
   if (noOdds.length) console.log(`  curated competition games with no provider odds match (${noOdds.length}): ${noOdds.slice(0, 8).map((x) => `${x.f.teams.home.name} vs ${x.f.teams.away.name}`).join('; ')}`)
@@ -238,10 +243,9 @@ async function generateDay(date, slugs, playedOn, maxFixtures) {
     orders[c] = [...aiIds, ...candidates[c].map((x) => x.id).filter((id) => !aiIds.includes(id))].map((id) => byId.get(id))
   }
   const configuredCap = Math.max(1, Number(process.env.MAX_FIXTURE_TICKET_APPEARANCES) || 4)
-  const slateCap = items.length < 12 ? 2 : items.length < 24 ? 3 : 4
-  const appearanceCap = Math.min(configuredCap, slateCap)
+  const appearanceCap = configuredCap
   const { selected: selectedByLevel } = pickBalanced(orders, CATEGORIES, 5, appearanceCap)
-  console.log(`  balanced ticket selection: cap ${appearanceCap} appearances per fixture across all odds levels`)
+  console.log(`  balanced ticket selection: cap ${appearanceCap} appearances per fixture across all odds levels; reuses fixtures only when needed`)
   const categories = CATEGORIES.map((c) => {
     const picks = selectedByLevel[c].map((cand, n) => {
       const games = cand.legs.map((leg) => {

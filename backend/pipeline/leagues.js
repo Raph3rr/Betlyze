@@ -9,7 +9,6 @@ export const LEAGUES = [
   { id: 10, label: 'International Friendlies', name: 'Friendlies', tier: 0, oddsApi: 'soccer_international_friendlies' },
   { id: 5, label: 'UEFA Nations League', name: 'UEFA Nations League', tier: 0, oddsApi: 'soccer_uefa_nations_league' },
   { id: 36, label: 'Africa Cup of Nations Qualifying', name: 'Africa Cup of Nations - Qualification', tier: 0, oddsApi: 'soccer_africa_cup_of_nations' },
-  { id: 536, label: 'CONCACAF Nations League', name: 'CONCACAF Nations League', tier: 0 },
 
   // Established top European leagues and major cups
   { id: 39, label: 'English Premier League', name: 'Premier League', country: 'England', tier: 1, oddsApi: 'soccer_epl' },
@@ -40,7 +39,6 @@ export const LEAGUES = [
   { id: 119, label: 'Danish Superliga', name: 'Superliga', country: 'Denmark', tier: 2, oddsApi: 'soccer_denmark_superliga' },
   { id: 207, label: 'Swiss Super League', name: 'Super League', country: 'Switzerland', tier: 2, oddsApi: 'soccer_switzerland_superleague' },
   { id: 235, label: 'Russian Premier League', name: 'Premier League', country: 'Russia', tier: 2, oddsApi: 'soccer_russia_premier_league' },
-  { id: 188, label: 'Australian A-League', name: 'A-League', country: 'Australia', tier: 2, oddsApi: 'soccer_australia_aleague' },
 
   // Selected, well-followed European second tiers
   { id: 40, label: 'English Championship', name: 'Championship', country: 'England', tier: 2, oddsApi: 'soccer_efl_champ' },
@@ -49,4 +47,6 @@ export const LEAGUES = [
   { id: 62, label: 'French Ligue 2', name: 'Ligue 2', country: 'France', tier: 2, oddsApi: 'soccer_france_ligue_two' },
   { id: 141, label: 'Spanish La Liga 2', name: 'Segunda', country: 'Spain', tier: 2, oddsApi: 'soccer_spain_segunda_division' },
   { id: 144, label: 'Belgian Pro League', name: 'Pro League', country: 'Belgium', tier: 2, oddsApi: 'soccer_belgium_first_div' },
+  { id: 41, label: 'English League One', name: 'League One', country: 'England', tier: 2, oddsApi: 'soccer_england_league1' },
+  { id: 42, label: 'English League Two', name: 'League Two', country: 'England', tier: 2, oddsApi: 'soccer_england_league2' },
 ]
