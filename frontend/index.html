@@ -7,6 +7,10 @@
     <title>Betlyze | Predict Smarter. Convert Seamlessly.</title>
     <meta name="description" content="Betlyze gives you AI-powered football predictions and converts bet codes between bookmakers like SportyBet and MSport in seconds." />
     <meta name="theme-color" content="#020713" />
+    <script>
+      try { document.documentElement.dataset.theme = localStorage.getItem('betlyze-theme') === 'light' ? 'light' : 'dark' }
+      catch { document.documentElement.dataset.theme = 'dark' }
+    </script>
     <link rel="canonical" href="https://betlyze.com/" />
 
     <link rel="icon" type="image/png" href="/favicon.png" />

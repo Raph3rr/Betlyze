@@ -20,21 +20,22 @@ Frontend (terminal 2):
 
 ## Check your API keys (backend)
 
-Put `API_FOOTBALL_KEY` and `ODDSPAPI_KEY` in `backend/.env`, then run:
+Put `API_FOOTBALL_KEY`, `BSD_API_KEY` and `ODDSAPI_KEY` in `backend/.env`, then run:
 
     cd backend
     npm run check-keys
 
-It shows your plan, requests used today, and which bookmakers each provider offers. It never prints your keys.
+It checks API-Football account status, BSD access, The Odds API soccer competitions, and Gemini models. It never prints your keys.
 
 ## More scripts (backend)
 
     npm run check-keys   # checks all your keys and lists the Gemini models your key can use
-    npm run sample       # saves small real examples of each API into backend/sample-output/
+    node scripts/probeProviders.js  # read-only check of upcoming international fixtures and odds provider matching
 
 ## Real predictions (backend)
 
     npm run generate     # builds today, tomorrow and the day after, and saves them in MongoDB
+    npm run generate:dry # bypasses existing-pick locks and shows what would be generated without replacing prediction documents
 
 The server also has a protected endpoint for a daily scheduler:
 
@@ -72,7 +73,7 @@ Put your email in `ADMIN_EMAILS` (backend `.env` and Render) to see every odds l
 today's and tomorrow's picks if they do not exist yet. A day's picks are never replaced once created.
 You can also start it by hand: GitHub, Actions tab, "Daily predictions", Run workflow.
 
-Secrets needed in GitHub (Settings, Secrets and variables, Actions): MONGODB_URI, API_FOOTBALL_KEY, ODDSPAPI_KEY, GEMINI_API_KEY.
+Secrets needed in GitHub (Settings, Secrets and variables, Actions): MONGODB_URI, API_FOOTBALL_KEY, BSD_API_KEY, ODDSAPI_KEY, GEMINI_API_KEY.
 
 ## Login on Vercel (important)
 

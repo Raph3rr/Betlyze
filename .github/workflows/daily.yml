@@ -40,12 +40,12 @@ jobs:
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-          ODDSPAPI_KEY: ${{ secrets.ODDSPAPI_KEY }}
+          BSD_API_KEY: ${{ secrets.BSD_API_KEY }}
+          ODDSAPI_KEY: ${{ secrets.ODDSAPI_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-3.5-flash
           GEMINI_FALLBACK_MODEL: gemini-2.5-flash
-          ODDS_BOOKMAKERS: 1xbet,bet365,pinnacle
-          MAX_FIXTURES_PER_DAY: '60'
+          MAX_FIXTURES_PER_RUN: '80'
           API_FOOTBALL_BUDGET: '90'
           API_FOOTBALL_MIN_INTERVAL_MS: '6500'
           KICKOFF_WINDOW: '06:00-22:30'

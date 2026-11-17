@@ -2,10 +2,9 @@
 // Confirms your keys work and shows what each provider offers. Never prints your keys.
 import 'dotenv/config'
 import * as football from '../services/apiFootball.js'
-import * as odds from '../services/oddsPapi.js'
+import * as bsd from '../services/bsd.js'
+import * as theOdds from '../services/theOddsApi.js'
 import * as gemini from '../services/gemini.js'
-import { LEAGUES } from '../pipeline/leagues.js'
-import { matchTournament } from '../pipeline/data.js'
 
 const WANTED = ['sporty', 'bet9ja', 'msport', '1xbet', 'bet365', 'betway']
 const matches = (names) => names.filter((n) => WANTED.some((w) => n.toLowerCase().includes(w)))
@@ -26,12 +25,17 @@ await step('API-Football: bookmakers', async () => {
   console.log(`  count: ${names.length}\n  matches: ${matches(names).join(', ') || 'none'}`)
 })
 
-await step('OddsPapi: bookmakers', async () => {
-  const data = await odds.rawCall('/v4/bookmakers')
-  const list = Array.isArray(data) ? data : Object.values(data)
-  const names = list.map((b) => (typeof b === 'string' ? b : b.bookmakerName || b.name || b.slug || '')).filter(Boolean)
-  if (!names.length) return console.log('  Unexpected response shape:', JSON.stringify(data).slice(0, 300))
-  console.log(`  count: ${names.length}\n  matches: ${matches(names).join(', ') || 'none'}`)
+await step('BSD: upcoming football events', async () => {
+  const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+  const body = await bsd.rawCall('/events/', { status: 'upcoming', date_from: date, date_to: date, limit: 5 })
+  const rows = Array.isArray(body) ? body : body.results || body.data || []
+  console.log(`  key accepted; returned ${rows.length} sample event(s)`)
+})
+
+await step('The Odds API: soccer competitions', async () => {
+  const { data } = await theOdds.rawCall('/sports')
+  const soccer = data.filter((s) => /^soccer_/i.test(s.key))
+  console.log(`  key accepted; ${soccer.length} soccer competitions available`)
 })
 
 await step('Gemini: models your key can use', async () => {
@@ -39,14 +43,6 @@ await step('Gemini: models your key can use', async () => {
   const want = gemini.MODEL()
   console.log(`  selected GEMINI_MODEL: ${want} -> ${models.includes(want) ? 'available' : 'NOT available, pick one from the list below'}`)
   console.log(`  flash models: ${models.filter((m) => m.includes('flash')).join(', ') || 'none found'}`)
-})
-
-await step('OddsPapi: which of our leagues have odds', async () => {
-  const tournaments = await odds.rawCall('/v4/tournaments', { sportId: odds.SOCCER_SPORT_ID })
-  const ok = [], missing = []
-  for (const l of LEAGUES) (matchTournament(l, tournaments) ? ok : missing).push(`${l.name} (${l.country || 'international'})`)
-  console.log(`  matched ${ok.length} of ${LEAGUES.length}`)
-  if (missing.length) console.log(`  NOT matched (edit pipeline/leagues.js): ${missing.join(', ')}`)
 })
 
 console.log('\nDone.')

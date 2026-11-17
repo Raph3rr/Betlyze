@@ -10,7 +10,25 @@ const links = [
   { to: '/settings', label: 'Settings' },
 ]
 
-export default function Sidebar() {
+function ThemeButton({ theme, onClick }) {
+  const next = theme === 'dark' ? 'light' : 'dark'
+  return (
+    <button onClick={onClick} aria-label={`Switch to ${next} mode`} title={`Switch to ${next} mode`}
+      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-line text-paper/80 transition-colors hover:border-brand hover:bg-paper/5">
+      {theme === 'dark' ? (
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+          <circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" />
+        </svg>
+      ) : (
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20.8 14.2A8.5 8.5 0 0 1 9.8 3.2 8.6 8.6 0 1 0 20.8 14.2Z" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
+export default function Sidebar({ theme = 'dark', onToggleTheme = () => {} }) {
   const [open, setOpen] = useState(false)
   const { user, logout } = useAuth()
   const close = () => setOpen(false)
@@ -22,16 +40,19 @@ export default function Sidebar() {
         <Link to="/" onClick={close} aria-label="Betlyze home">
           <Logo size={32} />
         </Link>
-        <button
-          aria-label="Toggle menu"
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
-          className="rounded-lg p-2 hover:bg-white/5"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeButton theme={theme} onClick={onToggleTheme} />
+          <button
+            aria-label="Toggle menu"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+            className="rounded-lg p-2 hover:bg-paper/5"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+            </svg>
+          </button>
+        </div>
       </header>
 
       {/* Sidebar on desktop, slide-in drawer on phone */}
@@ -53,7 +74,7 @@ export default function Sidebar() {
                 onClick={close}
                 className={({ isActive }) =>
                   `rounded-lg px-4 py-3 text-sm font-semibold transition-colors ${
-                    isActive ? 'bg-brand-deep text-white' : 'text-paper/70 hover:bg-white/5 hover:text-paper'
+                    isActive ? 'bg-brand-deep text-white' : 'text-paper/70 hover:bg-paper/5 hover:text-paper'
                   }`
                 }
               >
@@ -63,6 +84,7 @@ export default function Sidebar() {
           </nav>
         </div>
         <div className="flex flex-col gap-2">
+          <ThemeButton theme={theme} onClick={onToggleTheme} />
           {user ? (
             <>
               <p className="truncate px-1 text-sm text-paper/70">Signed in as <span className="font-semibold text-paper">{user.username}</span></p>

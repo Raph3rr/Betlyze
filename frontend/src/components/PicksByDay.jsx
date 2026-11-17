@@ -51,7 +51,7 @@ function AccaHeader({ n, acca }) {
   )
 }
 
-function Acca({ n, acca, open, onToggle }) {
+function Acca({ n, acca, open, onToggle, canBook }) {
   return (
     <li className="rounded-2xl border border-line bg-panel">
       <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center justify-between gap-4 p-4 text-left sm:px-6">
@@ -71,7 +71,12 @@ function Acca({ n, acca, open, onToggle }) {
               </li>
             ))}
           </ul>
-          <Link to="/converter" className="mt-4 inline-block rounded-lg bg-brand-deep px-5 py-2.5 text-sm font-bold text-white hover:bg-brand">Book these games</Link>
+          {canBook
+            ? <Link to="/converter" className="mt-4 inline-block rounded-lg bg-brand-deep px-5 py-2.5 text-sm font-bold text-white hover:bg-brand">Book these games</Link>
+            : <div className="mt-4 inline-flex items-center gap-2">
+                <button type="button" disabled title="Available with Pro access" className="rounded-lg bg-brand-deep px-5 py-2.5 text-sm font-bold text-white opacity-50">Book these games</button>
+                <span className="rounded-full border border-brand/40 bg-brand/10 px-2 py-0.5 text-xs font-bold text-brand">Pro</span>
+              </div>}
         </div>
       )}
     </li>
@@ -104,7 +109,7 @@ export default function PicksByDay() {
         <>
           <ul className="mt-6 space-y-3">
             {accas.slice(0, unlocked).map((a, i) => (
-              <Acca key={a.id} n={i + 1} acca={a} open={openId === a.id} onToggle={() => setOpenId(openId === a.id ? null : a.id)} />
+              <Acca key={a.id} n={i + 1} acca={a} open={openId === a.id} onToggle={() => setOpenId(openId === a.id ? null : a.id)} canBook={user?.plan === 'pro'} />
             ))}
           </ul>
           {unlocked < accas.length && (

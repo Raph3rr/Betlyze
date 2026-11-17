@@ -12,10 +12,30 @@
   --font-body: "Manrope", sans-serif;
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-ink: #eaf0f6;
+  --color-panel: #f3f6fa;
+  --color-line: #cbd6e2;
+  --color-brand: #006dbb;
+  --color-brand-soft: #087f9f;
+  --color-brand-deep: #0756a8;
+  --color-paper: #172b42;
+}
+
 body {
   background: var(--color-ink);
   color: var(--color-paper);
   font-family: var(--font-body);
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+:root[data-theme="light"] .text-red-300 {
+  color: #b42318;
 }
 
 :focus-visible {

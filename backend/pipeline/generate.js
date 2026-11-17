@@ -5,12 +5,13 @@ import PredictionSet from '../PredictionSet.js'
 import { CATEGORIES, LEAGUES } from './leagues.js'
 import { loadOdds, findOdds, leagueMatches } from './data.js'
 import { buildFacts, legsFor, templateWhy, SELECTIONS } from './facts.js'
-import { buildLadder, pickDiverse } from './slips.js'
+import { buildLadder, pickDiverse, pickBalanced } from './slips.js'
 import { settleDay } from './results.js'
 import { loadInjuries, previousLineups, adjustForAbsences } from './news.js'
 
-const BOOKMAKER_NAMES = { '1xbet': '1xBet', sportybet: 'SportyBet', msport: 'MSport', bet365: 'bet365', betway: 'Betway', pinnacle: 'Pinnacle' }
-const MAX_FIXTURES = Number(process.env.MAX_FIXTURES_PER_DAY) || 60
+const BOOKMAKER_NAMES = { consensus: 'BSD Consensus', '1xbet': '1xBet', onexbet: '1xBet', sportybet: 'SportyBet', msport: 'MSport', bet365: 'bet365', betway: 'Betway', pinnacle: 'Pinnacle' }
+const MAX_FIXTURES_PER_RUN = Number(process.env.MAX_FIXTURES_PER_RUN) || 80
+const DRY_RUN = process.env.DRY_RUN === 'true' || process.argv.includes('--dry-run')
 
 export const lagosToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
 export const addDays = (ymd, n) => {
@@ -100,15 +101,14 @@ export function spread(list, limit) {
   return out
 }
 
-async function generateDay(date, oddsFixtures, slugs, playedOn) {
-  const slugLabel = slugs.join('/')
+async function generateDay(date, slugs, playedOn, maxFixtures) {
   console.log(`\n== ${date}`)
   const all = (await football.getFixtures(date)).response
   playedOn.set(date, new Set(all.flatMap((f) => [f.teams.home.id, f.teams.away.id])))
   const league = new Map(LEAGUES.map((l) => [l.id, l]))
   // A day's picks are created once. Later runs never replace them, so they stay complete all day.
   const existing = await PredictionSet.findOne({ date }).lean()
-  if (existing?.categories?.some((c) => (c.picks || []).length) && process.env.FORCE_REGENERATE !== 'true') {
+  if (!DRY_RUN && existing?.categories?.some((c) => (c.picks || []).length) && process.env.FORCE_REGENERATE !== 'true') {
     console.log(`  picks for ${date} already exist, so they are locked and left untouched (FORCE_REGENERATE=true rebuilds them)`)
     return { date, status: 'locked', counts: {} }
   }
@@ -117,6 +117,7 @@ async function generateDay(date, oddsFixtures, slugs, playedOn) {
   const ours = all.filter((f) => {
     const l = league.get(f.league.id)
     if (!l) return false
+    if (l.tier === 0 && /\b(u1[789]|u2[013]|under[- ]?1[789]|under[- ]?2[013]|women)\b/i.test(`${f.teams.home.name} ${f.teams.away.name}`)) return false
     if (leagueMatches(f, l)) return true
     wrong.set(f.league.id, `${f.league.id} is "${f.league.name}" (${f.league.country}), leagues.js expects "${l.name}"`)
     return false
@@ -124,20 +125,40 @@ async function generateDay(date, oddsFixtures, slugs, playedOn) {
   if (wrong.size) console.log(`  WARNING: wrong league ids skipped, fix them in pipeline/leagues.js: ${[...wrong.values()].join('; ')}`)
   const notStarted = ours.filter((f) => f.fixture.status.short === 'NS')
   const upcoming = notStarted.filter(inWindow)
+  if (!upcoming.length) {
+    const categories = CATEGORIES.map((odds) => ({ odds, picks: [] }))
+    if (!DRY_RUN) await PredictionSet.findOneAndUpdate({ date }, { date, generatedAt: new Date(), oddsSource: slugs.join(', '), fixtureCount: 0, categories }, { upsert: true })
+    console.log('  no eligible fixtures in the curated slate and kickoff window')
+    return { date, status: 'empty', counts: {} }
+  }
+  const { odds: oddsFixtures, diagnostics } = await loadOdds(upcoming, date)
+  const marketNames = { home: 'home win', draw: 'draw', away: 'away win', dc1x: 'home/draw', dcx2: 'away/draw', dc12: 'home/away', o15: 'over 1.5', o25: 'over 2.5', o35: 'over 3.5', u25: 'under 2.5', u35: 'under 3.5', u45: 'under 4.5', btts: 'BTTS yes', bttsNo: 'BTTS no' }
+  for (const d of diagnostics) {
+    const providerLine = (name) => {
+      const p = d.sources[name]
+      const missing = p.missing.map(([k, n]) => `${marketNames[k]} ${n}`).join(', ') || 'none'
+      const unmatched = p.unmatchedFixtures.slice(0, 6).join('; ')
+      const more = p.unmatchedFixtures.length > 6 ? `; +${p.unmatchedFixtures.length - 6} more` : ''
+      const status = p.statuses.join('/')
+      const key = p.sportKeys.length ? ` key=${p.sportKeys.join('/')}` : ''
+      return `${name}${key} status=${status}, events ${p.matched}/${d.fixtures}, missing prices: ${missing}${unmatched ? `, no event: ${unmatched}${more}` : ''}`
+    }
+    const combined = d.combinedMissing.map(([k, n]) => `${marketNames[k]} ${n}`).join(', ') || 'none'
+    console.log(`  odds coverage ${d.league}: ${providerLine('BSD')}; ${providerLine('The Odds API')}; combined missing: ${combined}`)
+  }
   if (notStarted.length > upcoming.length) console.log(`  ${notStarted.length - upcoming.length} games skipped: kickoff outside ${WINDOW.join(' to ')} (Lagos time)`)
   const matched = upcoming.map((f) => ({ f, tier: league.get(f.league.id).tier, odds: findOdds(f, oddsFixtures) }))
-  const noOdds = matched.filter((x) => !x.odds && x.tier === 1)
-  if (noOdds.length) console.log(`  major-league games with no ${slugLabel} odds match (${noOdds.length}): ${noOdds.slice(0, 8).map((x) => `${x.f.teams.home.name} vs ${x.f.teams.away.name}`).join('; ')}`)
-  // Major leagues first (every game that has odds, up to the cap), then tier 2, then tier 3 only to fill the gaps.
+  const noOdds = matched.filter((x) => !x.odds && x.tier <= 2)
+  if (noOdds.length) console.log(`  curated competition games with no provider odds match (${noOdds.length}): ${noOdds.slice(0, 8).map((x) => `${x.f.teams.home.name} vs ${x.f.teams.away.name}`).join('; ')}`)
+  // Senior internationals lead during breaks, then headline leagues/cups, then selected second tiers.
   const withOdds = matched.filter((x) => x.odds).map((x) => ({ ...x, rank: LEAGUES.findIndex((l) => l.id === x.f.league.id) }))
   const tierGames = (t) => withOdds.filter((x) => x.tier === t)
-  const majors = spread(tierGames(1), MAX_FIXTURES)
-  const second = spread(tierGames(2), MAX_FIXTURES - majors.length)
-  const third = spread(tierGames(3), MAX_FIXTURES - majors.length - second.length)
-  const usable = [...majors, ...second, ...third]
-  console.log(`  games with odds: tier 1 (major) ${tierGames(1).length}, tier 2 ${tierGames(2).length}, tier 3 ${tierGames(3).length}. Used: ${majors.length} / ${second.length} / ${third.length}`)
+  const selected = []
+  for (const tier of [0, 1, 2]) selected.push(...spread(tierGames(tier), maxFixtures - selected.length))
+  const usable = selected
+  console.log(`  games with odds: international ${tierGames(0).length}, top Europe ${tierGames(1).length}, selected second tiers ${tierGames(2).length}. Used: ${[0,1,2].map((t) => usable.filter((x) => x.tier === t).length).join(' / ')}`)
   console.log(`  kickoff spread used (before 2pm / 2-6pm / 6-10pm / after 10pm, Lagos time): ${[0, 1, 2, 3].map((k) => usable.filter((x) => bucketOf(x.f) === k).length).join(' / ')}`)
-  console.log(`  ${all.length} fixtures that day: ${ours.length} in our leagues, ${upcoming.length} not started, ${usable.length} with ${slugLabel} odds (max ${MAX_FIXTURES})`)
+  console.log(`  ${all.length} fixtures that day: ${ours.length} in our leagues, ${upcoming.length} not started, ${usable.length} with provider odds (max ${maxFixtures})`)
 
   // 1) predictions (and recent games if needed)
   const wantRecent = process.env.RECENT_GAMES === 'true' || process.env.LINEUPS === 'true'
@@ -178,20 +199,19 @@ async function generateDay(date, oddsFixtures, slugs, playedOn) {
     const legsByLevel = [0, 1, 2].map((lv) => legsFor(adjusted, odds.prices, facts, odds.sources, lv, lv === 0 ? rejects : null))
     facts.league = league.get(f.league.id).label
     const tier = league.get(f.league.id).tier
-    if (!legsByLevel[0].length && tier === 1) noStrict.push(`${f.teams.home.name} vs ${f.teams.away.name}`)
+    if (!legsByLevel[0].length && tier <= 2) noStrict.push(`${f.teams.home.name} vs ${f.teams.away.name}`)
     if (legsByLevel.some((l) => l.length)) items.push({ fixtureId: f.fixture.id, f, facts, legsByLevel, tier })
   }
   if (Object.keys(rejects).length) console.log(`  selections dropped at the strict level, by reason: ${Object.entries(rejects).map(([k, v]) => `${k} ${v}`).join(', ')}`)
-  if (noStrict.length) console.log(`  major games with no strict selection (they only enter at looser levels): ${noStrict.slice(0, 10).join('; ')}`)
+  if (noStrict.length) console.log(`  curated games with no strict selection (they only enter at looser levels): ${noStrict.slice(0, 10).join('; ')}`)
   console.log(`  ${items.length} fixtures have usable selections (API-Football requests used this run: ${football.budget.used})`)
 
   const candidates = {}
-  const reserved = new Map() // games our own top picks of earlier levels would use, so later levels look elsewhere
   for (const c of CATEGORIES) {
-    const { candidates: list, stepUsed } = buildLadder(items, c, seedFor(date, c), reserved)
+    const { candidates: list, stepUsed } = buildLadder(items, c, seedFor(date, c), new Map())
     candidates[c] = list
-    const possible = pickDiverse(list, 5, reserved, { minWant: 3 }).length
-    console.log(`  ${c} odds: ${list.length} candidate slips, ${possible} picks possible${stepUsed ? ` (loosest step used: ${stepUsed.majorsOnly ? 'major leagues only' : 'all leagues'}, strictness ${stepUsed.level})` : ''}`)
+    const possible = pickDiverse(list, 5, new Map(), { commit: false }).length
+    console.log(`  ${c} odds: ${list.length} candidate slips, ${possible} non-overlapping picks before cross-level allocation${stepUsed ? ` (loosest step used: ${stepUsed.majorsOnly ? 'European tier 1 only' : 'all curated competitions'}, strictness ${stepUsed.level})` : ''}`)
   }
 
   let ai = null
@@ -201,12 +221,19 @@ async function generateDay(date, oddsFixtures, slugs, playedOn) {
   const reasons = new Map((Array.isArray(ai?.reasons) ? ai.reasons : []).map((r) => [`${r.fixtureId}|${r.selection}`, r.why]))
   const byFixture = new Map(items.map((i) => [i.fixtureId, i]))
 
-  const used = new Map() // how many picks today already use each game, across all odds levels
-  const categories = CATEGORIES.map((c) => {
+  const orders = {}
+  for (const c of CATEGORIES) {
     const byId = new Map(candidates[c].map((x) => [x.id, x]))
     const aiIds = (Array.isArray(ai?.choices?.[c]) ? ai.choices[c] : []).filter((id, i, a) => byId.has(id) && a.indexOf(id) === i)
-    const order = [...aiIds, ...candidates[c].map((x) => x.id).filter((id) => !aiIds.includes(id))].map((id) => byId.get(id))
-    const picks = pickDiverse(order, 5, used, { minWant: 3 }).map((cand, n) => {
+    orders[c] = [...aiIds, ...candidates[c].map((x) => x.id).filter((id) => !aiIds.includes(id))].map((id) => byId.get(id))
+  }
+  const configuredCap = Math.max(1, Number(process.env.MAX_FIXTURE_TICKET_APPEARANCES) || 4)
+  const slateCap = items.length < 12 ? 2 : items.length < 24 ? 3 : 4
+  const appearanceCap = Math.min(configuredCap, slateCap)
+  const { selected: selectedByLevel } = pickBalanced(orders, CATEGORIES, 5, appearanceCap)
+  console.log(`  balanced ticket selection: cap ${appearanceCap} appearances per fixture across all odds levels`)
+  const categories = CATEGORIES.map((c) => {
+    const picks = selectedByLevel[c].map((cand, n) => {
       const games = cand.legs.map((leg) => {
         const it = byFixture.get(leg.fixtureId)
         const [market, pick] = SELECTIONS[leg.key]
@@ -225,16 +252,14 @@ async function generateDay(date, oddsFixtures, slugs, playedOn) {
     return { odds: c, picks }
   })
 
-  if (!items.length || categories.every((c) => !c.picks.length)) { console.log('  nothing usable for this day, so any saved predictions were left alone'); return { date, status: 'nothing', counts: {} } }
-
-  await PredictionSet.findOneAndUpdate(
+  const thin = categories.filter((c) => c.picks.length < 5).map((c) => `${c.odds} odds (${c.picks.length})`)
+  if (!DRY_RUN) await PredictionSet.findOneAndUpdate(
     { date },
-    { date, generatedAt: new Date(), oddsSource: slugs.map((x) => BOOKMAKER_NAMES[x] || x).join(', '), fixtureCount: items.length, categories },
+    { date, generatedAt: new Date(), oddsSource: slugs.join(', '), fixtureCount: items.length, categories },
     { upsert: true },
   )
-  console.log('  saved:', categories.map((c) => `${c.odds} odds: ${c.picks.length} picks`).join(', '))
-  const thin = categories.filter((c) => c.picks.length < 3).map((c) => `${c.odds} odds (${c.picks.length})`)
-  if (thin.length) console.log(`  WARNING: fewer than 3 picks for ${thin.join(', ')}. The day did not have enough usable games.`)
+  console.log(DRY_RUN ? '  dry-run (not saved):' : '  saved:', categories.map((c) => `${c.odds} odds: ${c.picks.length} picks`).join(', '))
+  if (thin.length) console.log(`  WARNING: fewer than 5 qualifying picks for ${thin.join(', ')}. Available fixtures, odds, prices and the repeat cap limited the slate.`)
   return { date, status: 'saved', counts: Object.fromEntries(categories.map((c) => [c.odds, c.picks.length])) }
 }
 
@@ -247,30 +272,31 @@ export async function generateForDays(offsets = Array.from({ length: (Number(pro
     football.budget.limit = Math.min(football.budget.limit, Math.max(0, requests.limit_day - requests.current - 3))
   } catch (e) { console.log('Could not read API-Football quota:', e.message) }
   console.log(`API-Football request budget for this run: ${football.budget.limit}`)
+  if (DRY_RUN) console.log('DRY RUN: existing pick locks are bypassed; prediction documents will not be written.')
 
-  const slugs = (process.env.ODDS_BOOKMAKERS || process.env.ODDS_BOOKMAKER || '1xbet,bet365,pinnacle').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 3)
-  const slugLabel = slugs.join(', ')
+  const slugs = [process.env.BSD_API_KEY && 'BSD Consensus', process.env.ODDSAPI_KEY && 'The Odds API'].filter(Boolean)
 
-  const summary = ['## Betlyze daily run', '']
+  const summary = [DRY_RUN ? '## Betlyze daily dry run' : '## Betlyze daily run', '']
   const note = (line) => { summary.push(line); console.log(line) }
 
-  // Check yesterday's picks against the real scores first (skipped when nothing is pending)
+  // Check yesterday's scores only in normal generation mode.
   const playedOn = new Map()
   const y = addDays(lagosToday(), -1)
-  try {
+  if (DRY_RUN) summary.push('- Dry run: skipped result settlement and will not write prediction documents.')
+  else try {
     const yesterday = await settleDay(y, { onlyIfPending: true })
     if (yesterday) {
       playedOn.set(y, new Set(yesterday.flatMap((f) => [f.teams.home.id, f.teams.away.id])))
       summary.push(`- Yesterday (${y}): results checked.`)
     } else summary.push(`- Yesterday (${y}): nothing to check.`)
   } catch (e) { summary.push(`- Yesterday (${y}): could not check results: ${e.message}`); console.log(`  could not check yesterday's results: ${e.message}`) }
-  try { await settleDay(addDays(lagosToday(), -2), { onlyIfPending: true }) } catch (e) { console.log(`  could not re-check the day before yesterday: ${e.message}`) }
+  if (!DRY_RUN) try { await settleDay(addDays(lagosToday(), -2), { onlyIfPending: true }) } catch (e) { console.log(`  could not re-check the day before yesterday: ${e.message}`) }
 
   const open = []
   for (const off of offsets) {
     const d = addDays(lagosToday(), off)
     const ex = await PredictionSet.findOne({ date: d }).lean()
-    if (!ex?.categories?.some((c) => (c.picks || []).length) || process.env.FORCE_REGENERATE === 'true') open.push(d)
+    if (DRY_RUN || !ex?.categories?.some((c) => (c.picks || []).length) || process.env.FORCE_REGENERATE === 'true') open.push(d)
   }
   if (!open.length) {
     summary.push('- Every day already has picks (locked). Nothing to generate.')
@@ -279,31 +305,17 @@ export async function generateForDays(offsets = Array.from({ length: (Number(pro
     console.log('\nFinished.')
     return { failedDays: 0 }
   }
-
-  let oddsFixtures
-  try {
-    oddsFixtures = await loadOdds(slugs)
-  } catch (e) {
-    summary.push(`- FAILED: could not load odds: ${e.message}`)
-    writeSummary(summary)
-    throw e
-  }
-  console.log(`OddsPapi: ${oddsFixtures.length} upcoming fixtures with prices from ${slugLabel}`)
-  if (!oddsFixtures.length) {
-    const msg = `No odds could be loaded from ${slugLabel}, so nothing was generated and your saved predictions were left alone. Check the messages above.`
-    summary.push(`- FAILED: ${msg}`)
-    writeSummary(summary)
-    throw new Error(msg)
-  }
+  const maxFixturesPerOpenDay = Math.max(1, Math.floor(MAX_FIXTURES_PER_RUN / open.length))
+  console.log(`Fixture analysis cap: ${MAX_FIXTURES_PER_RUN} across ${open.length} open day(s), up to ${maxFixturesPerOpenDay} per day`)
 
   let failedDays = 0
   for (const off of offsets) {
     const date = addDays(lagosToday(), off)
     try {
-      const r = await generateDay(date, oddsFixtures, slugs, playedOn)
-      summary.push(r.status === 'saved' ? `- ${date}: saved. Picks per level: ${Object.entries(r.counts).map(([k, v]) => `${k} odds ${v}`).join(', ')}.`
+      const r = await generateDay(date, slugs, playedOn, maxFixturesPerOpenDay)
+      summary.push(r.status === 'saved' ? `- ${date}: ${DRY_RUN ? 'dry-run result, not saved' : 'saved'}. Picks per level: ${Object.entries(r.counts).map(([k, v]) => `${k} odds ${v}`).join(', ')}.`
         : r.status === 'locked' ? `- ${date}: already has picks (locked).`
-        : `- ${date}: no usable games, nothing saved.`)
+        : r.status === 'empty' ? `- ${date}: no eligible fixtures in the curated slate and kickoff window.` : `- ${date}: no usable games.`)
     } catch (e) {
       if (/access to this date/i.test(e.message)) {
         console.log(`  skipped: your API-Football plan cannot see this date (${e.message})`)

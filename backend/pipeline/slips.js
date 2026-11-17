@@ -54,7 +54,7 @@ export function buildSafest(items, target, seed, floor = 0.5) {
   let best = []
   for (let minP = base; minP >= floor - 1e-9; minP -= 0.05) {
     const pool = items.map((i) => ({ ...i, legs: i.legs.filter((l) => l.p >= minP) })).filter((i) => i.legs.length)
-    const list = buildCandidates(pool, target, seed, { keep: 10 })
+    const list = buildCandidates(pool, target, seed, { keep: 25 })
     if (list.length >= 5) return list
     if (list.length > best.length) best = list
   }
@@ -74,12 +74,11 @@ function buildWithCap(items, target, seed, used, floor) {
   return best
 }
 
-const STRICT = [[0, 0], [0, 1]] // no game shared inside the level, and each game used at most twice in the day
-const RELAXED = [[1, 1], [2, 1], [1, 99], [2, 99], [99, 99]] // only used to reach the minimum number of picks
+const STRICT = [[0, 0], [0, 1]] // no overlap within a level; a fixture can appear at most twice across all levels
 
-// Picks up to `want` slips in the given order. Strict rules first. If that gives fewer than `minWant`, repeats are
-// allowed step by step until `minWant` is reached. `used` counts how many picks already use each game today.
-export function pickDiverse(order, want = 5, used = new Map(), { minWant = 0, commit = true } = {}) {
+// Picks up to `want` slips in order, limiting each fixture to two appearances across all odds levels.
+// Within one odds level, slips still share no games.
+export function pickDiverse(order, want = 5, used = new Map(), { commit = true } = {}) {
   const chosen = []
   const fresh = (c, maxUsed) => c.legs.every((l) => (used.get(l.fixtureId) || 0) <= maxUsed)
   const run = (passes, limit) => {
@@ -91,12 +90,38 @@ export function pickDiverse(order, want = 5, used = new Map(), { minWant = 0, co
     }
   }
   run(STRICT, want)
-  if (chosen.length < minWant) run(RELAXED, minWant)
   if (commit) for (const c of chosen) for (const l of c.legs) used.set(l.fixtureId, (used.get(l.fixtureId) || 0) + 1)
   return chosen
 }
 
-// [majors only?, strictness level]. Major competitions get loosened once before any smaller league is added.
+// Allocate every odds level together in round-robin order. A fixture may be used once per
+// level and is subject to a firm day-wide cap; scarce slates therefore return fewer tickets.
+export function pickBalanced(orders, categories, want = 5, maxAppearances = 4) {
+  const selected = Object.fromEntries(categories.map((c) => [c, []]))
+  const fixtureCounts = new Map()
+  const fixtureByLevel = new Map(categories.map((c) => [c, new Set()]))
+  let progress = true
+  while (progress && categories.some((c) => selected[c].length < want)) {
+    progress = false
+    for (const category of categories) {
+      if (selected[category].length >= want) continue
+      const candidate = (orders[category] || []).find((slip) => {
+        const ids = [...new Set(slip.legs.map((leg) => leg.fixtureId))]
+        return ids.every((id) => !fixtureByLevel.get(category).has(id) && (fixtureCounts.get(id) || 0) < maxAppearances)
+      })
+      if (!candidate) continue
+      selected[category].push(candidate)
+      progress = true
+      for (const id of new Set(candidate.legs.map((leg) => leg.fixtureId))) {
+        fixtureCounts.set(id, (fixtureCounts.get(id) || 0) + 1)
+        fixtureByLevel.get(category).add(id)
+      }
+    }
+  }
+  return { selected, fixtureCounts }
+}
+
+// [European tier 1 only?, strictness level]. The curated slate contains no local/lower-division fallback.
 const STEPS = [[true, 0], [true, 1], [false, 0], [false, 1], [true, 2], [false, 2]]
 
 // items: [{ fixtureId, tier, legsByLevel: [strict legs, looser legs, loosest legs] }]. Stops as soon as 5 picks sharing no game are possible.
@@ -113,5 +138,5 @@ export function buildLadder(items, target, seed, used) {
     stepUsed = { majorsOnly, level }
     if (pickDiverse(merged, 5, used, { commit: false }).length >= 5) break
   }
-  return { candidates: merged.slice(0, 12).map((c, i) => ({ ...c, id: `c${target}-${i + 1}` })), stepUsed }
+  return { candidates: merged.slice(0, 30).map((c, i) => ({ ...c, id: `c${target}-${i + 1}` })), stepUsed }
 }

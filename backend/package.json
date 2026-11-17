@@ -9,6 +9,7 @@
     "check-keys": "node scripts/checkKeys.js",
     "sample": "node scripts/sample.js",
     "generate": "node scripts/generate.js",
+    "generate:dry": "node scripts/generate.js --dry-run",
     "settle": "node scripts/settle.js",
     "calibration": "node scripts/calibration.js"
   },

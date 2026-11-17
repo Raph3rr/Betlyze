@@ -15,7 +15,7 @@ export function dayTabs() {
 
 const clock = (iso) => new Date(iso).toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit' })
 
-function Pick({ n, pick, open, onToggle }) {
+function Pick({ n, pick, open, onToggle, canBook = false }) {
   return (
     <li className="rounded-2xl border border-line bg-panel">
       <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center justify-between gap-4 p-4 text-left sm:px-6">
@@ -55,7 +55,12 @@ function Pick({ n, pick, open, onToggle }) {
               </li>
             ))}
           </ul>
-          <Link to="/book" state={{ pick }} className="mt-2 inline-block rounded-lg bg-brand-deep px-5 py-2.5 text-sm font-bold text-white hover:bg-brand">Book these games</Link>
+          {canBook
+            ? <Link to="/book" state={{ pick }} className="mt-2 inline-block rounded-lg bg-brand-deep px-5 py-2.5 text-sm font-bold text-white hover:bg-brand">Book these games</Link>
+            : <div className="mt-2 inline-flex items-center gap-2">
+                <button type="button" disabled title="Available with Pro access" className="rounded-lg bg-brand-deep px-5 py-2.5 text-sm font-bold text-white opacity-50">Book these games</button>
+                <span className="rounded-full border border-brand/40 bg-brand/10 px-2 py-0.5 text-xs font-bold text-brand">Pro</span>
+              </div>}
         </div>
       )}
     </li>
@@ -83,10 +88,11 @@ export default function PredictionsView({ preview = false }) {
   }, [day, user?.plan])
 
   const current = data?.categories.find((c) => c.odds === cat)
+  const pastResultsPending = day < 2 && (!data?.generatedAt || data.categories.some((c) => c.record?.pending > 0))
   const note = data?.sample
     ? 'Sample data and sample reasoning for design only, using made-up clubs.'
     : data
-      ? `Odds are pre-match prices (via OddsPapi) from the bookmaker named on each game, and can change before kickoff.${data.generatedAt ? ` Updated ${new Date(data.generatedAt).toLocaleString('en-NG', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}.` : ''}`
+      ? `Odds are pre-match prices from BSD consensus or the listed bookmaker, and can change before kickoff.${data.generatedAt ? ` Updated ${new Date(data.generatedAt).toLocaleString('en-NG', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}.` : ''}`
       : ''
 
   if (preview) {
@@ -142,9 +148,10 @@ export default function PredictionsView({ preview = false }) {
           {error && <p role="alert" className="mt-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>}
           {loading && !data && <p className="mt-6 text-paper/60">Loading predictions…</p>}
           {current && !current.locked && (current.picks.length === 0
-            ? <p className="mt-6 text-paper/70">{data.generatedAt ? `${data.pro ? 'You have Pro access, but no' : 'No'} picks were generated for this category on this day.` : 'Predictions for this day have not been generated yet.'}</p>
-            : <ul className="mt-5 space-y-3">{current.picks.map((p, i) => <Pick key={p.id} n={i + 1} pick={p} open={openId === p.id} onToggle={() => setOpenId(openId === p.id ? null : p.id)} />)}</ul>)}
-          {current?.locked && (
+            ? <p className="mt-6 text-paper/70">{pastResultsPending ? 'Results for this day have not been generated yet.' : 'No picks are available for this odds level today.'}</p>
+            : <ul className="mt-5 space-y-3">{current.picks.map((p, i) => <Pick key={p.id} n={i + 1} pick={p} open={openId === p.id} onToggle={() => setOpenId(openId === p.id ? null : p.id)} canBook={data.pro} />)}</ul>)}
+          {current?.locked && current.count === 0 && <p className="mt-6 text-paper/70">{pastResultsPending ? 'Results for this day have not been generated yet.' : 'No picks are available for this odds level today.'}</p>}
+          {current?.locked && current.count > 0 && (
             <div className="relative mt-5">
               <ul className="pointer-events-none select-none space-y-3 blur-sm" aria-hidden="true">
                 {Array.from({ length: current.count }, (_, i) => (

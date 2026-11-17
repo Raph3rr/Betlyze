@@ -20,7 +20,7 @@ export default function Auth({ mode }) {
     setBusy(true)
     try {
       await (isSignup ? signup : login)(form)
-      navigate('/converter')
+      navigate('/')
     } catch (err) {
       setError(err.message)
     } finally {
