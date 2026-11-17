@@ -1,9 +1,9 @@
 export const CATEGORIES = [2, 3, 5, 10]
 export const FREE = [2] // only the 2-odds level is free; 3, 5 and 10 odds are Pro
 
-// Coverage is intentionally curated: senior international fixtures during breaks and established
-// European leagues/cups. We do not pull lower divisions or local/global leagues to pad the slate.
-// tier 0 internationals are first when scheduled; tier 1 European competitions are first otherwise.
+// Coverage is intentionally curated: senior internationals, established European leagues/cups,
+// selected European second tiers, and other well-followed top divisions with supported odds markets.
+// We do not pull local/global leagues just to pad the slate. Tier 0 internationals lead during breaks.
 export const LEAGUES = [
   // Senior internationals (youth fixtures are filtered in generate.js)
   { id: 10, label: 'International Friendlies', name: 'Friendlies', tier: 0, oddsApi: 'soccer_international_friendlies' },
@@ -22,13 +22,25 @@ export const LEAGUES = [
   { id: 2, label: 'UEFA Champions League', name: 'Champions League', tier: 1, oddsApi: 'soccer_uefa_champs_league' },
   { id: 3, label: 'UEFA Europa League', name: 'Europa League', tier: 1, oddsApi: 'soccer_uefa_europa_league' },
   { id: 848, label: 'UEFA Conference League', name: 'Conference League', tier: 1, oddsApi: 'soccer_uefa_europa_conference_league' },
-  { id: 45, label: 'English FA Cup', name: 'FA Cup', country: 'England', tier: 1 },
-  { id: 48, label: 'English League Cup', name: 'League Cup', country: 'England', tier: 1 },
-  { id: 143, label: 'Spanish Copa del Rey', name: 'Copa del Rey', country: 'Spain', tier: 1 },
-  { id: 137, label: 'Italian Coppa Italia', name: 'Coppa Italia', country: 'Italy', tier: 1 },
-  { id: 81, label: 'German DFB-Pokal', name: 'DFB Pokal', country: 'Germany', tier: 1 },
-  { id: 66, label: 'French Coupe de France', name: 'Coupe de France', country: 'France', tier: 1 },
+  { id: 45, label: 'English FA Cup', name: 'FA Cup', country: 'England', tier: 1, oddsApi: 'soccer_fa_cup' },
+  { id: 48, label: 'English League Cup', name: 'League Cup', country: 'England', tier: 1, oddsApi: 'soccer_england_efl_cup' },
+  { id: 143, label: 'Spanish Copa del Rey', name: 'Copa del Rey', country: 'Spain', tier: 1, oddsApi: 'soccer_spain_copa_del_rey' },
+  { id: 137, label: 'Italian Coppa Italia', name: 'Coppa Italia', country: 'Italy', tier: 1, oddsApi: 'soccer_italy_coppa_italia' },
+  { id: 81, label: 'German DFB-Pokal', name: 'DFB Pokal', country: 'Germany', tier: 1, oddsApi: 'soccer_germany_dfb_pokal' },
+  { id: 66, label: 'French Coupe de France', name: 'Coupe de France', country: 'France', tier: 1, oddsApi: 'soccer_france_coupe_de_france' },
   { id: 90, label: 'Dutch KNVB Beker', name: 'KNVB Beker', country: 'Netherlands', tier: 1 },
+
+  // Additional established leagues with supported odds and kickoff schedules suited to Lagos hours
+  { id: 218, label: 'Austrian Bundesliga', name: 'Bundesliga', country: 'Austria', tier: 2, oddsApi: 'soccer_austria_bundesliga' },
+  { id: 179, label: 'Scottish Premiership', name: 'Premiership', country: 'Scotland', tier: 2, oddsApi: 'soccer_spl' },
+  { id: 203, label: 'Turkish Süper Lig', name: 'Süper Lig', country: 'Turkey', tier: 2, oddsApi: 'soccer_turkey_super_league' },
+  { id: 307, label: 'Saudi Pro League', name: 'Pro League', country: 'Saudi-Arabia', tier: 2, oddsApi: 'soccer_saudi_arabia_pro_league' },
+  { id: 197, label: 'Greek Super League', name: 'Super League 1', country: 'Greece', tier: 2, oddsApi: 'soccer_greece_super_league' },
+  { id: 106, label: 'Polish Ekstraklasa', name: 'Ekstraklasa', country: 'Poland', tier: 2, oddsApi: 'soccer_poland_ekstraklasa' },
+  { id: 119, label: 'Danish Superliga', name: 'Superliga', country: 'Denmark', tier: 2, oddsApi: 'soccer_denmark_superliga' },
+  { id: 207, label: 'Swiss Super League', name: 'Super League', country: 'Switzerland', tier: 2, oddsApi: 'soccer_switzerland_superleague' },
+  { id: 235, label: 'Russian Premier League', name: 'Premier League', country: 'Russia', tier: 2, oddsApi: 'soccer_russia_premier_league' },
+  { id: 188, label: 'Australian A-League', name: 'A-League', country: 'Australia', tier: 2, oddsApi: 'soccer_australia_aleague' },
 
   // Selected, well-followed European second tiers
   { id: 40, label: 'English Championship', name: 'Championship', country: 'England', tier: 2, oddsApi: 'soccer_efl_champ' },

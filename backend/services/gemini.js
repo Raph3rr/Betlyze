@@ -60,7 +60,14 @@ async function callModel(model, prompt, { retries, maxOutputTokens }) {
       await new Promise((r) => setTimeout(r, 3000 * 2 ** attempt)) // 3s, 6s, 12s, 24s
       continue
     }
-    throw new Error(`Gemini responded ${res.status}`)
+    const payload = await res.json().catch(() => null)
+    const apiError = payload?.error
+    const status = apiError?.status ? ` ${apiError.status}` : ''
+    const message = apiError?.message ? `: ${apiError.message}` : ''
+    const details = Array.isArray(apiError?.details) && apiError.details.length
+      ? ` (${JSON.stringify(apiError.details).slice(0, 700)})`
+      : ''
+    throw new Error(`Gemini model ${model} responded ${res.status}${status}${message}${details}`)
   }
 }
 

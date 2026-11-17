@@ -13,9 +13,13 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: 'Rebuild picks even if the day already has them. Only tick this BEFORE the first kickoff of that day.'
+        description: 'Rebuild picks for every processed date, including today. Use only before kickoff.'
         type: boolean
         default: false
+      rebuild_date:
+        description: 'Rebuild only this date (YYYY-MM-DD), preserving the other date'
+        type: string
+        required: false
 
 concurrency:
   group: daily-predictions
@@ -48,6 +52,7 @@ jobs:
           MAX_FIXTURES_PER_RUN: '80'
           API_FOOTBALL_BUDGET: '90'
           API_FOOTBALL_MIN_INTERVAL_MS: '6500'
-          KICKOFF_WINDOW: '06:00-22:30'
+          KICKOFF_WINDOW: '08:00-23:00'
           DAYS_AHEAD: '1'
           FORCE_REGENERATE: ${{ inputs.force && 'true' || 'false' }}
+          FORCE_REGENERATE_DATE: ${{ inputs.rebuild_date }}

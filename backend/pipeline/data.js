@@ -138,10 +138,23 @@ export async function loadOdds(fixtures, date) {
     try {
       const sports = await theOdds.getSports()
       const upcoming = fixtures.filter((f) => f.fixture.date.startsWith(date))
-      const keys = new Set(upcoming.map((f) => LEAGUES.find((l) => l.id === f.league.id)?.oddsApi).filter(Boolean))
       const active = new Set(sports.filter((s) => s.active).map((s) => s.key))
       const cap = Number(process.env.ODDS_API_MAX_SPORTS_PER_RUN) || 8
-      const selected = LEAGUES.map((l) => l.oddsApi).filter((k, i, a) => k && keys.has(k) && a.indexOf(k) === i && active.has(k) && (oddsApiRunData.has(k) || oddsApiRunData.size < cap))
+      const keyStats = new Map()
+      for (const f of upcoming) {
+        const league = LEAGUES.find((l) => l.id === f.league.id)
+        if (!league?.oddsApi) continue
+        const stat = keyStats.get(league.oddsApi) || { key: league.oddsApi, tier: league.tier, fixtures: 0, rank: LEAGUES.indexOf(league) }
+        stat.tier = Math.min(stat.tier, league.tier)
+        stat.fixtures++
+        keyStats.set(league.oddsApi, stat)
+      }
+      const prioritized = [...keyStats.values()].filter((x) => active.has(x.key))
+        .sort((a, b) => a.tier - b.tier || b.fixtures - a.fixtures || a.rank - b.rank)
+      const cachedKeys = prioritized.filter((x) => oddsApiRunData.has(x.key))
+      const newKeySlots = Math.max(0, cap - oddsApiRunData.size)
+      const newKeys = prioritized.filter((x) => !oddsApiRunData.has(x.key)).slice(0, newKeySlots)
+      const selected = [...cachedKeys, ...newKeys].map((x) => x.key)
       for (const f of upcoming) {
         const record = coverage.get(f.fixture.id)['The Odds API']
         record.status = !record.sportKey ? 'no competition key mapped'

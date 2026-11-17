@@ -14,6 +14,12 @@ const MAX_FIXTURES_PER_RUN = Number(process.env.MAX_FIXTURES_PER_RUN) || 80
 const DRY_RUN = process.env.DRY_RUN === 'true' || process.argv.includes('--dry-run')
 
 export const lagosToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+const generatedLagosDate = (value) => value ? new Date(value).toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) : null
+const needsDayOfRefresh = (set, today) => {
+  const generatedDate = generatedLagosDate(set?.generatedAt)
+  const hasStartedGames = (set?.categories || []).some((category) => (category.picks || []).some((pick) => (pick.games || []).some((game) => game.kickoff && Date.parse(game.kickoff) <= Date.now())))
+  return Boolean(generatedDate && generatedDate < today && !hasStartedGames)
+}
 export const addDays = (ymd, n) => {
   const d = new Date(`${ymd}T12:00:00Z`)
   d.setUTCDate(d.getUTCDate() + n)
@@ -79,7 +85,7 @@ Return only JSON in this shape:
 
 // Kickoff window in Lagos time: 0 = before 2pm, 1 = 2-6pm, 2 = 6-10pm, 3 = 10pm or later.
 // Only games that kick off inside this window (Lagos time) are used, so nobody has to stay up for a 1am kickoff.
-const WINDOW = (process.env.KICKOFF_WINDOW || '06:00-22:30').split('-')
+const WINDOW = (process.env.KICKOFF_WINDOW || '08:00-23:00').split('-')
 const toMinutes = (t) => { const [h, m = 0] = t.split(':').map(Number); return h * 60 + m }
 const lagosMinutes = (f) => {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(f.fixture.timestamp * 1000))
@@ -106,12 +112,16 @@ async function generateDay(date, slugs, playedOn, maxFixtures) {
   const all = (await football.getFixtures(date)).response
   playedOn.set(date, new Set(all.flatMap((f) => [f.teams.home.id, f.teams.away.id])))
   const league = new Map(LEAGUES.map((l) => [l.id, l]))
-  // A day's picks are created once. Later runs never replace them, so they stay complete all day.
+  // Picks generated for today stay locked; a previous day's provisional picks are refreshed once the date arrives.
   const existing = await PredictionSet.findOne({ date }).lean()
-  if (!DRY_RUN && existing?.categories?.some((c) => (c.picks || []).length) && process.env.FORCE_REGENERATE !== 'true') {
+  const hasSavedPicks = existing?.categories?.some((c) => (c.picks || []).length)
+  const wasProvisionalFromEarlierDay = needsDayOfRefresh(existing, lagosToday())
+  const forceThisDate = process.env.FORCE_REGENERATE === 'true' || process.env.FORCE_REGENERATE_DATE === date
+  if (!DRY_RUN && hasSavedPicks && !wasProvisionalFromEarlierDay && !forceThisDate) {
     console.log(`  picks for ${date} already exist, so they are locked and left untouched (FORCE_REGENERATE=true rebuilds them)`)
     return { date, status: 'locked', counts: {} }
   }
+  if (hasSavedPicks && wasProvisionalFromEarlierDay) console.log(`  refreshing ${date}'s provisional picks on the day; picks generated today remain locked`)
 
   const wrong = new Map()
   const ours = all.filter((f) => {
@@ -150,13 +160,13 @@ async function generateDay(date, slugs, playedOn, maxFixtures) {
   const matched = upcoming.map((f) => ({ f, tier: league.get(f.league.id).tier, odds: findOdds(f, oddsFixtures) }))
   const noOdds = matched.filter((x) => !x.odds && x.tier <= 2)
   if (noOdds.length) console.log(`  curated competition games with no provider odds match (${noOdds.length}): ${noOdds.slice(0, 8).map((x) => `${x.f.teams.home.name} vs ${x.f.teams.away.name}`).join('; ')}`)
-  // Senior internationals lead during breaks, then headline leagues/cups, then selected second tiers.
+  // Senior internationals lead during breaks, then headline European leagues/cups, then selected other leagues.
   const withOdds = matched.filter((x) => x.odds).map((x) => ({ ...x, rank: LEAGUES.findIndex((l) => l.id === x.f.league.id) }))
   const tierGames = (t) => withOdds.filter((x) => x.tier === t)
   const selected = []
   for (const tier of [0, 1, 2]) selected.push(...spread(tierGames(tier), maxFixtures - selected.length))
   const usable = selected
-  console.log(`  games with odds: international ${tierGames(0).length}, top Europe ${tierGames(1).length}, selected second tiers ${tierGames(2).length}. Used: ${[0,1,2].map((t) => usable.filter((x) => x.tier === t).length).join(' / ')}`)
+  console.log(`  games with odds: international ${tierGames(0).length}, top Europe ${tierGames(1).length}, selected other leagues ${tierGames(2).length}. Used: ${[0,1,2].map((t) => usable.filter((x) => x.tier === t).length).join(' / ')}`)
   console.log(`  kickoff spread used (before 2pm / 2-6pm / 6-10pm / after 10pm, Lagos time): ${[0, 1, 2, 3].map((k) => usable.filter((x) => bucketOf(x.f) === k).length).join(' / ')}`)
   console.log(`  ${all.length} fixtures that day: ${ours.length} in our leagues, ${upcoming.length} not started, ${usable.length} with provider odds (max ${maxFixtures})`)
 
@@ -293,10 +303,14 @@ export async function generateForDays(offsets = Array.from({ length: (Number(pro
   if (!DRY_RUN) try { await settleDay(addDays(lagosToday(), -2), { onlyIfPending: true }) } catch (e) { console.log(`  could not re-check the day before yesterday: ${e.message}`) }
 
   const open = []
+  const today = lagosToday()
   for (const off of offsets) {
-    const d = addDays(lagosToday(), off)
+    const d = addDays(today, off)
     const ex = await PredictionSet.findOne({ date: d }).lean()
-    if (DRY_RUN || !ex?.categories?.some((c) => (c.picks || []).length) || process.env.FORCE_REGENERATE === 'true') open.push(d)
+    const hasSavedPicks = ex?.categories?.some((c) => (c.picks || []).length)
+    const staleProvisional = needsDayOfRefresh(ex, today)
+    const forceThisDate = process.env.FORCE_REGENERATE === 'true' || process.env.FORCE_REGENERATE_DATE === d
+    if (DRY_RUN || !hasSavedPicks || staleProvisional || forceThisDate) open.push(d)
   }
   if (!open.length) {
     summary.push('- Every day already has picks (locked). Nothing to generate.')
@@ -310,7 +324,7 @@ export async function generateForDays(offsets = Array.from({ length: (Number(pro
 
   let failedDays = 0
   for (const off of offsets) {
-    const date = addDays(lagosToday(), off)
+    const date = addDays(today, off)
     try {
       const r = await generateDay(date, slugs, playedOn, maxFixturesPerOpenDay)
       summary.push(r.status === 'saved' ? `- ${date}: ${DRY_RUN ? 'dry-run result, not saved' : 'saved'}. Picks per level: ${Object.entries(r.counts).map(([k, v]) => `${k} odds ${v}`).join(', ')}.`
