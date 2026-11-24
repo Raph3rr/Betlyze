@@ -75,14 +75,15 @@ function AppContent() {
 
       <main className="min-h-screen px-5 pb-16 pt-24 lg:pl-72 lg:pr-12 lg:pt-12">
         <Routes>
-          <Route path="/" element={<Home />} />
+          {/* <Route path="/" element={<Home />} />
           <Route path="/converter" element={<Converter />} />
           <Route path="/predictions" element={<Predictions />} />
           <Route path="/book" element={<Book />} />
           <Route path="/login" element={<Auth mode="login" />} />
           <Route path="/signup" element={<Auth mode="signup" />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<NotFound />} /> */}
+          <Route path="*" element={<Maintenance />}></Route>
         </Routes>
       </main>
     </>
